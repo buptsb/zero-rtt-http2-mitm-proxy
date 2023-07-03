@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"runtime/debug"
 
+	"github.com/google/martian/v3"
 	"github.com/google/martian/v3/h2"
 	mux "github.com/sagernet/sing-mux"
 	M "github.com/sagernet/sing/common/metadata"
@@ -18,6 +19,7 @@ var _ mux.ServerHandler = (*h2handler)(nil)
 
 type h2handler struct {
 	h2Config *h2.Config
+	proxy    *martian.Proxy
 }
 
 func NewH2Handler() *h2handler {
@@ -28,6 +30,7 @@ func NewH2Handler() *h2handler {
 	}
 	return &h2handler{
 		h2Config: h2Config,
+		proxy:    martian.NewProxy(),
 	}
 }
 
@@ -47,7 +50,9 @@ func (h *h2handler) NewConnection(ctx context.Context, stream net.Conn, metadata
 		}
 		return bufio.CopyConn(ctx, stream, sc)
 	*/
-	return h.h2Config.Proxy(nil, stream, u)
+	// return h.h2Config.Proxy(nil, stream, u)
+	h.proxy.HandleLoop(stream)
+	return nil
 }
 
 func (h *h2handler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {

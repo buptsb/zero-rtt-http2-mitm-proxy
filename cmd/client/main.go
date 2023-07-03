@@ -75,6 +75,7 @@ func main() {
 		},
 	}
 	p.SetRoundTripper(tr)
+	p.SetDial(muxer.Dial)
 
 	var x509c *x509.Certificate
 	var priv interface{}
