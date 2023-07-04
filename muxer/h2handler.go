@@ -2,7 +2,6 @@ package muxer
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -13,25 +12,9 @@ import (
 	mux "github.com/sagernet/sing-mux"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
-	http2to1 "github.com/zckevin/demo/2to1"
 )
 
 var _ mux.ServerHandler = (*h2handler)(nil)
-
-func DialNginxProxy(host string) (net.Conn, error) {
-	tlsConn, err := tls.Dial(network.NetworkTCP, "localhost:3128", &tls.Config{
-		NextProtos:         []string{"h2"},
-		InsecureSkipVerify: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return tlsConn, nil
-}
-
-func DialHTTP2To1Conn(host string) (net.Conn, error) {
-	return http2to1.NewH2AdaptorConn(), nil
-}
 
 type h2handler struct {
 	h2Config *h2.Config
@@ -42,7 +25,6 @@ func NewH2Handler() *h2handler {
 		AllowedHostsFilter: func(_ string) bool { return true },
 		// StreamProcessorFactories: spf,
 		EnableDebugLogs: true,
-		DialServerConn:  DialHTTP2To1Conn,
 	}
 	return &h2handler{
 		h2Config: h2Config,
