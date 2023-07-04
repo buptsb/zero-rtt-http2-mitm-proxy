@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -14,27 +15,21 @@ import (
 	"github.com/zckevin/demo/muxer"
 )
 
-const (
-	pprof = true
-)
-
 var (
-	level = flag.Int("log-level", 0, "log level")
-)
+	pprof     = flag.Bool("pprof", true, "enable pprof")
+	pprofPort = flag.Int("pprof-port", 6060, "pprof port")
+	debugMode = flag.Bool("debug", false, "debug mode")
 
-func newLogger() log.ContextLogger {
-	logFactory, err := log.New(log.Options{})
-	if err != nil {
-		panic(err)
-	}
-	return logFactory.NewLogger("muxer")
-}
+	level     = flag.Int("log-level", 0, "log level")
+	relayType = flag.String("relay-type", "h2", "relay type")
+)
 
 func demuxConn(conn net.Conn) {
-	handler := muxer.NewH2Handler()
-	err := mux.HandleConnection(context.TODO(), handler, newLogger(), conn, M.Metadata{})
+	logger := muxer.NewLogger("server")
+	muxHandler := muxer.NewMuxHandler(*relayType)
+	err := mux.HandleConnection(context.TODO(), muxHandler, logger, conn, M.Metadata{})
 	if err != nil {
-		log.Error("== demuxConn err", err)
+		logger.Error("demuxConn err: ", err)
 	}
 }
 
@@ -54,14 +49,15 @@ func listener() {
 }
 
 func main() {
-	if pprof {
+	if *pprof {
 		go func() {
-			http.ListenAndServe("localhost:6060", nil)
+			http.ListenAndServe(fmt.Sprintf("localhost:%d", *pprofPort), nil)
 		}()
 	}
 
 	flag.Parse()
 	mlog.SetLevel(*level)
+	muxer.DebugMode = *debugMode
 
 	listener()
 }
