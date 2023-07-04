@@ -7,6 +7,7 @@ require (
 	github.com/sagernet/sing v0.2.5
 	github.com/sagernet/sing-box v1.2.7
 	github.com/sagernet/sing-mux v0.1.0
+	golang.org/x/net v0.11.0
 )
 
 require (
@@ -17,13 +18,15 @@ require (
 	github.com/sagernet/sing-dns v0.1.5-0.20230415085626-111ecf799dfc // indirect
 	github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37 // indirect
 	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/net v0.11.0 // indirect
 	golang.org/x/sys v0.9.0 // indirect
 	golang.org/x/text v0.10.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 )
 
 replace github.com/google/martian/v3 => /home/zc/PROJECTS/tcp/martian-origin
+
 replace github.com/sagernet/smux => /home/zc/PROJECTS/tcp/smux
+
 replace github.com/sagernet/sing => /home/zc/PROJECTS/tcp/sing
+
 replace github.com/sagernet/sing-mux => /home/zc/PROJECTS/tcp/sing-mux

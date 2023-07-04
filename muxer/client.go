@@ -29,8 +29,8 @@ func init() {
 type DirectDialer struct{}
 
 func (d *DirectDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	// addr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:8081")
-	addr, _ := net.ResolveTCPAddr("tcp", "107.174.244.30:8081")
+	addr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:8081")
+	// addr, _ := net.ResolveTCPAddr("tcp", "107.174.244.30:8081")
 	return net.DialTCP("tcp", nil, addr)
 }
 
