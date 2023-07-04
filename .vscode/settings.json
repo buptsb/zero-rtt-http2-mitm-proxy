@@ -1,0 +1,12 @@
+{
+  "go.testFlags": [
+    // "-gcflags=-l",
+  ],
+  "files.exclude": {
+    "mocks": true,
+    "cmd/server/server": true,
+    "server": true,
+  },
+  "todo-tree.tree.disableCompactFolders": true,
+  "todo-tree.tree.showCountsInTree": true
+}
