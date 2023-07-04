@@ -3,6 +3,7 @@ package http2to1
 import (
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -19,10 +20,6 @@ var (
 )
 
 type H2AdaptorConn struct {
-	// framer *http2.Framer
-	// w      *bufpipe.PipeWriter
-
-	// headersRead  bool
 	decoder  *hpack.Decoder
 	peekBuf  *bytes.Buffer
 	writeBuf *bytes.Buffer
@@ -32,10 +29,7 @@ type H2AdaptorConn struct {
 }
 
 func NewH2AdaptorConn() net.Conn {
-	// r, w := bufpipe.New(nil)
 	c := &H2AdaptorConn{
-		// framer:        http2.NewFramer(nil, r),
-		// w:             w,
 		decoder:       hpack.NewDecoder(4096, nil),
 		peekBuf:       bytes.NewBuffer(nil),
 		writeBuf:      bytes.NewBuffer(nil),
@@ -43,40 +37,6 @@ func NewH2AdaptorConn() net.Conn {
 	}
 	return c
 }
-
-/*
-	func (c *H2AdaptorConn) tryPeekServerInfo() ([]hpack.HeaderField, error) {
-		bufCopy := bytes.NewBuffer(c.peekBuf.Bytes())
-		framer := http2.NewFramer(nil, c.peekBuf)
-		f, err := framer.ReadFrame()
-		if err != nil {
-			c.peekBuf = bufCopy
-			log.Println("== read frame err:", err, c.peekBuf)
-			return nil, nil
-		}
-		log.Printf("== read frame: %+v \n", f)
-
-		decoderHeaders := func() ([]hpack.HeaderField, error) {
-			return c.decoder.DecodeFull(c.headerBuf.Bytes())
-		}
-		switch f := f.(type) {
-		case *http2.HeadersFrame:
-			c.headerBuf.Reset()
-			c.headerBuf.Write(f.HeaderBlockFragment())
-			if f.HeadersEnded() {
-				return decoderHeaders()
-			}
-		case *http2.ContinuationFrame:
-			c.headerBuf.Write(f.HeaderBlockFragment())
-			if f.HeadersEnded() {
-				return decoderHeaders()
-			}
-		default:
-			c.cachedFrames = append(c.cachedFrames, f)
-		}
-		return nil, nil
-	}
-*/
 
 func (c *H2AdaptorConn) tryPeekHeaders() ([]byte, error) {
 	bufCopy := bytes.NewBuffer(c.peekBuf.Bytes())
@@ -144,31 +104,52 @@ func (c *H2AdaptorConn) onHeadersBuf(headersBuf []byte) error {
 }
 
 func (c *H2AdaptorConn) dialHTTP2Conn(host, scheme string) (net.Conn, string, error) {
-	protocolCh := make(chan string, 1)
-	tlsConfig := &tls.Config{
-		NextProtos: []string{"http/1.1", "h2"},
-		VerifyConnection: func(cs tls.ConnectionState) error {
-			log.Println("== tls connection NegotiatedProtocol:", cs.NegotiatedProtocol)
-			protocolCh <- cs.NegotiatedProtocol
-			return nil
-		},
+	if scheme != "https" && scheme != "http" {
+		return nil, "", errors.New("unexpected scheme: " + scheme)
 	}
-	tlsConn, err := tls.Dial("tcp", fmt.Sprintf("%s:443", host), tlsConfig)
-	if err != nil {
-		return nil, "", err
+	dialFn := func() (net.Conn, error) {
+		switch scheme {
+		case "https":
+			return tls.Dial("tcp", fmt.Sprintf("%s:443", host), &tls.Config{
+				NextProtos: []string{"http/1.1"},
+			})
+		case "http":
+			return net.Dial("tcp", fmt.Sprintf("%s:80", host))
+		}
+		panic("unreachable")
 	}
-	var h2conn net.Conn
-	// TODO: add timeout and failure handling
-	protocol := <-protocolCh
-	switch protocol {
-	case "h2":
-		h2conn = tlsConn
-	case "http/1.1":
-		h2conn = newHttp2OverHttp1Conn(tlsConn)
-	default:
-		return nil, "", fmt.Errorf("unexpected protocol: %s", protocol)
+
+	switch scheme {
+	case "https":
+		protocolCh := make(chan string, 1)
+		tlsConfig := &tls.Config{
+			NextProtos: []string{"http/1.1", "h2"},
+			VerifyConnection: func(cs tls.ConnectionState) error {
+				log.Println("== tls connection NegotiatedProtocol:", cs.NegotiatedProtocol)
+				protocolCh <- cs.NegotiatedProtocol
+				return nil
+			},
+		}
+		tlsConn, err := tls.Dial("tcp", fmt.Sprintf("%s:443", host), tlsConfig)
+		if err != nil {
+			return nil, "", err
+		}
+		var h2conn net.Conn
+		// TODO: add timeout and failure handling
+		protocol := <-protocolCh
+		switch protocol {
+		case "h2":
+			h2conn = tlsConn
+		case "http/1.1":
+			h2conn = newHttp2OverHttp1Conn(tlsConn, dialFn)
+		default:
+			return nil, "", fmt.Errorf("unexpected protocol: %s", protocol)
+		}
+		return h2conn, protocol, nil
+	case "http":
+		return newHttp2OverHttp1Conn(nil, dialFn), "http/1.1", nil
 	}
-	return h2conn, protocol, nil
+	panic("unreachable")
 }
 
 func (c *H2AdaptorConn) Write(buf []byte) (int, error) {
@@ -196,54 +177,6 @@ func (c *H2AdaptorConn) Write(buf []byte) (int, error) {
 	}
 	return c.h2conn.Write(buf)
 }
-
-/*
-func (c *H2AdaptorConn) handleFrame(f http2.Frame) error {
-	decoderHeaders := func() error {
-		headers, err := c.decoder.DecodeFull(c.headerBuf.Bytes())
-		if err == nil {
-			_ = headers
-		}
-		return err
-	}
-
-	if c.h2conn == nil {
-		switch f := f.(type) {
-		case *http2.HeadersFrame:
-			c.headerBuf.Reset()
-			c.headerBuf.Write(f.HeaderBlockFragment())
-			if f.HeadersEnded() {
-				return decoderHeaders()
-			}
-		case *http2.ContinuationFrame:
-			c.headerBuf.Write(f.HeaderBlockFragment())
-			if f.HeadersEnded() {
-				return decoderHeaders()
-			}
-		default:
-			c.cachedFrames = append(c.cachedFrames, f)
-		}
-	} else {
-		switch f := f.(type) {
-		case *http2.DataFrame:
-
-		default:
-		}
-	}
-}
-
-func (c *H2AdaptorConn) readFramesLoop() {
-	for {
-		f, err := c.framer.ReadFrame()
-		if err != nil {
-			log.Println("== read frame err:", err, c.peekBuf)
-			return
-		} else {
-			err = c.handleFrame(f)
-		}
-	}
-}
-*/
 
 func (c *H2AdaptorConn) Close() error         { return nil }
 func (c *H2AdaptorConn) LocalAddr() net.Addr  { panic("not implemented") }

@@ -3,10 +3,12 @@ module github.com/zckevin/demo
 go 1.20
 
 require (
+	github.com/acomagu/bufpipe v1.0.4
 	github.com/google/martian/v3 v3.3.2
 	github.com/sagernet/sing v0.2.5
 	github.com/sagernet/sing-box v1.2.7
 	github.com/sagernet/sing-mux v0.1.0
+	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
 	golang.org/x/net v0.11.0
 )
 
