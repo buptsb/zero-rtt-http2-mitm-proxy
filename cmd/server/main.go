@@ -12,7 +12,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	mux "github.com/sagernet/sing-mux"
 	M "github.com/sagernet/sing/common/metadata"
-	"github.com/zckevin/demo/muxer"
+	"github.com/zckevin/http2-mitm-proxy/muxer"
 )
 
 var (

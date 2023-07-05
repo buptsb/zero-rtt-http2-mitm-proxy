@@ -6,6 +6,7 @@
     "mocks": true,
     "cmd/server/server": true,
     "server": true,
+    "vendor": true,
   },
   "todo-tree.tree.disableCompactFolders": true,
   "todo-tree.tree.showCountsInTree": true

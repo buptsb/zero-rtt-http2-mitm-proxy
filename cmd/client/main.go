@@ -15,7 +15,7 @@ import (
 	"github.com/google/martian/v3/h2"
 	mlog "github.com/google/martian/v3/log"
 	"github.com/google/martian/v3/mitm"
-	"github.com/zckevin/demo/muxer"
+	"github.com/zckevin/http2-mitm-proxy/muxer"
 
 	_ "net/http/pprof"
 )

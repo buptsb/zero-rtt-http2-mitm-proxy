@@ -1,4 +1,4 @@
-module github.com/zckevin/demo
+module github.com/zckevin/http2-mitm-proxy
 
 go 1.20
 
