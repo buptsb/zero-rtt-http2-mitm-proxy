@@ -1,0 +1,109 @@
+# github.com/dustin/go-humanize v1.0.1
+## explicit; go 1.16
+github.com/dustin/go-humanize
+# github.com/google/martian/v3 v3.3.2 => /home/zc/PROJECTS/tcp/martian-origin
+## explicit; go 1.18
+github.com/google/martian/v3
+github.com/google/martian/v3/h2
+github.com/google/martian/v3/log
+github.com/google/martian/v3/mitm
+github.com/google/martian/v3/nosigpipe
+github.com/google/martian/v3/proxyutil
+github.com/google/martian/v3/trafficshape
+# github.com/hashicorp/yamux v0.1.1
+## explicit; go 1.15
+github.com/hashicorp/yamux
+# github.com/logrusorgru/aurora v2.0.3+incompatible
+## explicit
+github.com/logrusorgru/aurora
+# github.com/miekg/dns v1.1.54
+## explicit; go 1.19
+github.com/miekg/dns
+# github.com/sagernet/sing v0.2.5
+## explicit; go 1.18
+github.com/sagernet/sing/common
+github.com/sagernet/sing/common/atomic
+github.com/sagernet/sing/common/auth
+github.com/sagernet/sing/common/baderror
+github.com/sagernet/sing/common/buf
+github.com/sagernet/sing/common/bufio
+github.com/sagernet/sing/common/cache
+github.com/sagernet/sing/common/debug
+github.com/sagernet/sing/common/exceptions
+github.com/sagernet/sing/common/format
+github.com/sagernet/sing/common/logger
+github.com/sagernet/sing/common/metadata
+github.com/sagernet/sing/common/network
+github.com/sagernet/sing/common/observable
+github.com/sagernet/sing/common/random
+github.com/sagernet/sing/common/rw
+github.com/sagernet/sing/common/task
+github.com/sagernet/sing/common/uot
+github.com/sagernet/sing/common/x/collections
+github.com/sagernet/sing/common/x/constraints
+github.com/sagernet/sing/common/x/linkedhashmap
+github.com/sagernet/sing/common/x/list
+# github.com/sagernet/sing-box v1.2.7
+## explicit; go 1.18
+github.com/sagernet/sing-box/common/badjson
+github.com/sagernet/sing-box/common/json
+github.com/sagernet/sing-box/constant
+github.com/sagernet/sing-box/constant/goos
+github.com/sagernet/sing-box/log
+github.com/sagernet/sing-box/option
+# github.com/sagernet/sing-dns v0.1.5-0.20230415085626-111ecf799dfc
+## explicit; go 1.18
+github.com/sagernet/sing-dns
+# github.com/sagernet/sing-mux v0.1.0 => /home/zc/PROJECTS/tcp/sing-mux
+## explicit; go 1.18
+github.com/sagernet/sing-mux
+# github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37
+## explicit; go 1.13
+github.com/sagernet/smux
+# golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
+## explicit; go 1.20
+golang.org/x/exp/maps
+# golang.org/x/mod v0.8.0
+## explicit; go 1.17
+golang.org/x/mod/semver
+# golang.org/x/net v0.11.0
+## explicit; go 1.17
+golang.org/x/net/bpf
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2
+golang.org/x/net/http2/hpack
+golang.org/x/net/idna
+golang.org/x/net/internal/iana
+golang.org/x/net/internal/socket
+golang.org/x/net/ipv4
+golang.org/x/net/ipv6
+# golang.org/x/sys v0.9.0
+## explicit; go 1.17
+golang.org/x/sys/execabs
+golang.org/x/sys/internal/unsafeheader
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# golang.org/x/text v0.10.0
+## explicit; go 1.17
+golang.org/x/text/secure/bidirule
+golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+# golang.org/x/tools v0.6.0
+## explicit; go 1.18
+golang.org/x/tools/go/gcexportdata
+golang.org/x/tools/go/internal/packagesdriver
+golang.org/x/tools/go/packages
+golang.org/x/tools/internal/event
+golang.org/x/tools/internal/event/core
+golang.org/x/tools/internal/event/keys
+golang.org/x/tools/internal/event/label
+golang.org/x/tools/internal/gcimporter
+golang.org/x/tools/internal/gocommand
+golang.org/x/tools/internal/packagesinternal
+golang.org/x/tools/internal/pkgbits
+golang.org/x/tools/internal/tokeninternal
+golang.org/x/tools/internal/typeparams
+golang.org/x/tools/internal/typesinternal
+# github.com/google/martian/v3 => /home/zc/PROJECTS/tcp/martian-origin
+# github.com/sagernet/sing-mux => /home/zc/PROJECTS/tcp/sing-mux
