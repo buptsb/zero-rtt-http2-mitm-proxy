@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"net/http"
 	"net/url"
 	"runtime/debug"
 
@@ -14,10 +13,6 @@ import (
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
-)
-
-var (
-	defaultHTTPClient = &http.Client{}
 )
 
 var _ mux.ServerHandler = (*muxHandler)(nil)

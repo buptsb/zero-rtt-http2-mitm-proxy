@@ -15,6 +15,10 @@ const (
 	dumpReqRespSeperator = "=====================\n"
 )
 
+var (
+	defaultHTTPClient = &http.Client{}
+)
+
 type h2MuxHandler struct {
 	logger log.ContextLogger
 }
