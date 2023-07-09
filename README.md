@@ -1,4 +1,4 @@
-# http2-mitm-proxy
+# zero-rtt-http2-mitm-proxy
 HTTP MITM proxy over HTTP2 overy smux multiplexer, zero rtt, no cwnd slow start
 
 ## Definitions
@@ -24,3 +24,15 @@ HTTP MITM proxy over HTTP2 overy smux multiplexer, zero rtt, no cwnd slow start
   - in case Chrome has 6 conns per proxy host limitation
 - HTTP 2to1 translation
   - support non-HTTP2 websites 
+
+## Usage
+- create cert.crt and cert.key in /certs dir
+  - `openssl req -x509 -newkey rsa:4096 -keyout cert.key -out cert.crt -days 365 -nodes` 
+- run server in a VPS
+  - `just start-server`
+- start http2 proxy on local
+  - `just start-client server_addr=$IP:$PORT`
+- test it
+  - `curl -x http://localhost:8080 -k https://ipinfo.io`
+- change your browser's proxy settings to `http://localhost:8080`
+- enjoy
