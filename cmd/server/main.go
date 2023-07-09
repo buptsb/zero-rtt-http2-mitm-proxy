@@ -19,9 +19,10 @@ var (
 	pprof     = flag.Bool("pprof", true, "enable pprof")
 	pprofPort = flag.Int("pprof-port", 6060, "pprof port")
 	debugMode = flag.Bool("debug", false, "debug mode")
+	level     = flag.Int("log-level", 0, "log level, 0-3")
 
-	level     = flag.Int("log-level", 0, "log level")
-	relayType = flag.String("relay-type", "h2", "relay type")
+	listenAddr = flag.String("listen-addr", ":20001", "listen address")
+	relayType  = flag.String("relay-type", "h2", "relay type")
 )
 
 func demuxConn(conn net.Conn) {
@@ -34,7 +35,7 @@ func demuxConn(conn net.Conn) {
 }
 
 func listener() {
-	l, err := net.Listen("tcp", ":8081")
+	l, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
 		log.Fatal(err)
 	}

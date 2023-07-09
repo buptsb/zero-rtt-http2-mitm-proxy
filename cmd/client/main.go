@@ -25,12 +25,14 @@ const (
 )
 
 var (
-	addr       = flag.String("addr", ":8080", "host:port of the proxy")
-	cert       = flag.String("cert", "", "filepath to the CA certificate used to sign MITM certificates")
-	key        = flag.String("key", "", "filepath to the private key of the CA used to sign MITM certificates")
-	level      = flag.Int("log-level", 0, "log level")
+	cert = flag.String("cert", "", "filepath to the CA certificate used to sign MITM certificates")
+	key  = flag.String("key", "", "filepath to the private key of the CA used to sign MITM certificates")
+
+	debugMode = flag.Bool("debug", false, "debug mode")
+	level     = flag.Int("log-level", 0, "log level, 0-3")
+
+	listenAddr = flag.String("addr", ":8080", "host:port of the proxy")
 	serverAddr = flag.String("server-addr", "", "proxy server address")
-	debugMode  = flag.Bool("debug", false, "debug mode")
 )
 
 func main() {
@@ -47,7 +49,7 @@ func main() {
 	p := martian.NewProxy()
 	defer p.Close()
 
-	l, err := net.Listen("tcp", *addr)
+	l, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
