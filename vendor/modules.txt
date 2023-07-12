@@ -19,6 +19,9 @@ github.com/logrusorgru/aurora
 # github.com/miekg/dns v1.1.54
 ## explicit; go 1.19
 github.com/miekg/dns
+# github.com/nadoo/glider v0.16.3
+## explicit; go 1.20
+github.com/nadoo/glider/pkg/pool
 # github.com/sagernet/sing v0.2.5
 ## explicit; go 1.18
 github.com/sagernet/sing/common

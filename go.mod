@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/google/martian/v3 v3.3.2
+	github.com/nadoo/glider v0.16.3
 	github.com/sagernet/sing v0.2.5
 	github.com/sagernet/sing-box v1.2.7
 	github.com/sagernet/sing-mux v0.1.0
