@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 
+	"github.com/nadoo/glider/pkg/pool"
 	"github.com/sagernet/sing-box/log"
 	"golang.org/x/exp/maps"
 	"golang.org/x/net/http2"
@@ -16,8 +17,20 @@ const (
 )
 
 var (
-	defaultHTTPClient = &http.Client{}
+	defaultHttpClient *http.Client
 )
+
+func init() {
+	tr := &http.Transport{
+		ReadBufferSize: 1 << 16,
+	}
+	if err := http2.ConfigureTransport(tr); err != nil {
+		panic(err)
+	}
+	defaultHttpClient = &http.Client{
+		Transport: tr,
+	}
+}
 
 type h2MuxHandler struct {
 	logger log.ContextLogger
@@ -48,7 +61,7 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.dump("== dump request for: ", string(buf), r)
 	}
 
-	resp, err := defaultHTTPClient.Do(r)
+	resp, err := defaultHttpClient.Do(r)
 	if err != nil {
 		h.logError(r, "do request err: ", err)
 		return
@@ -64,18 +77,23 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	maps.Copy(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 
-	for {
-		buf := make([]byte, 1024)
+	fn := func() error {
+		buf := pool.GetBuffer(4096)
+		defer pool.PutBuffer(buf)
+
 		n, err := resp.Body.Read(buf)
 		if err != nil && err != io.EOF {
 			h.logError(r, "body read err: ", err)
-			break
+			return err
 		}
 		if _, werr := w.Write(buf[:n]); werr != nil {
 			h.logError(r, "write err: ", err)
-			break
+			return err
 		}
-		if err == io.EOF {
+		return err
+	}
+	for {
+		if err := fn(); err != nil {
 			break
 		}
 	}
