@@ -1,4 +1,4 @@
-package muxer
+package internal
 
 import (
 	"io"
@@ -44,7 +44,7 @@ func (h *h2MuxHandler) logError(r *http.Request, desc string, err error) {
 func (h *h2MuxHandler) dump(desc, content string, r *http.Request) {
 	h.logger.Debug(desc, r.URL.String(), "\n",
 		dumpReqRespSeperator,
-		content,
+		content, "\n",
 		dumpReqRespSeperator)
 }
 

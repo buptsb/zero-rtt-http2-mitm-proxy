@@ -10,7 +10,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	mux "github.com/sagernet/sing-mux"
 	M "github.com/sagernet/sing/common/metadata"
-	"github.com/zckevin/http2-mitm-proxy/muxer"
+	"github.com/zckevin/http2-mitm-proxy/internal"
 )
 
 var (
@@ -24,8 +24,8 @@ var (
 )
 
 func demuxConn(conn net.Conn) {
-	logger := muxer.NewLogger("server")
-	muxHandler := muxer.NewMuxHandler(*relayType)
+	logger := internal.NewLogger("server")
+	muxHandler := internal.NewMuxHandler(*relayType)
 	err := mux.HandleConnection(context.TODO(), muxHandler, logger, conn, M.Metadata{})
 	if err != nil {
 		logger.Error("demuxConn err: ", err)
@@ -51,10 +51,10 @@ func listener() {
 func main() {
 	flag.Parse()
 	if *pprof {
-		go muxer.SpawnPprofServer(*pprofPort)
+		go internal.SpawnPprofServer(*pprofPort)
 	}
 	mlog.SetLevel(*level)
-	muxer.DebugMode = *debugMode
+	internal.DebugMode = *debugMode
 
 	listener()
 }

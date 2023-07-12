@@ -16,7 +16,7 @@ import (
 	"github.com/google/martian/v3/h2"
 	mlog "github.com/google/martian/v3/log"
 	"github.com/google/martian/v3/mitm"
-	"github.com/zckevin/http2-mitm-proxy/muxer"
+	"github.com/zckevin/http2-mitm-proxy/internal"
 )
 
 var (
@@ -31,16 +31,16 @@ var (
 	listenAddr = flag.String("addr", ":8080", "host:port of the proxy")
 	serverAddr = flag.String("server-addr", "", "proxy server address")
 
-	maxMuxConnections = flag.Int("max-mux-connections", 1, "max tcp connections for each muxer")
+	maxMuxConnections = flag.Int("max-mux-connections", 1, "max tcp connections for each internal")
 )
 
 func main() {
 	flag.Parse()
 	if *pprof {
-		go muxer.SpawnPprofServer(*pprofPort)
+		go internal.SpawnPprofServer(*pprofPort)
 	}
 	mlog.SetLevel(*level)
-	muxer.DebugMode = *debugMode
+	internal.DebugMode = *debugMode
 
 	p := martian.NewProxy()
 	defer p.Close()
@@ -91,7 +91,7 @@ func main() {
 			AllowedHostsFilter: func(_ string) bool { return true },
 			// StreamProcessorFactories: spf,
 			EnableDebugLogs: true,
-			DialServerConn:  muxer.NewMuxServerConnDialer(*serverAddr, "smux", *maxMuxConnections).DialClientStream,
+			DialServerConn:  internal.NewMuxServerConnDialer(*serverAddr, "smux", *maxMuxConnections).DialClientStream,
 			// use io.Copy() instead of Martian h2 relay
 			UseBitwiseCopy: true,
 		}

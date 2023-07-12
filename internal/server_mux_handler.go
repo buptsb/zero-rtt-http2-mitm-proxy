@@ -1,4 +1,4 @@
-package muxer
+package internal
 
 import (
 	"context"
