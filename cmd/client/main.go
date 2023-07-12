@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"time"
@@ -16,33 +17,28 @@ import (
 	mlog "github.com/google/martian/v3/log"
 	"github.com/google/martian/v3/mitm"
 	"github.com/zckevin/http2-mitm-proxy/muxer"
-
-	_ "net/http/pprof"
-)
-
-const (
-	pprof = true
 )
 
 var (
-	cert = flag.String("cert", "", "filepath to the CA certificate used to sign MITM certificates")
-	key  = flag.String("key", "", "filepath to the private key of the CA used to sign MITM certificates")
-
+	pprof     = flag.Bool("pprof", true, "enable pprof")
+	pprofPort = flag.Int("pprof-port", 6061, "pprof port")
 	debugMode = flag.Bool("debug", false, "debug mode")
 	level     = flag.Int("log-level", 0, "log level, 0-3")
 
+	cert = flag.String("cert", "", "filepath to the CA certificate used to sign MITM certificates")
+	key  = flag.String("key", "", "filepath to the private key of the CA used to sign MITM certificates")
+
 	listenAddr = flag.String("addr", ":8080", "host:port of the proxy")
 	serverAddr = flag.String("server-addr", "", "proxy server address")
+
+	maxMuxConnections = flag.Int("max-mux-connections", 1, "max tcp connections for each muxer")
 )
 
 func main() {
-	if pprof {
-		go func() {
-			log.Println(http.ListenAndServe("localhost:6061", nil))
-		}()
-	}
-
 	flag.Parse()
+	if *pprof {
+		go muxer.SpawnPprofServer(*pprofPort)
+	}
 	mlog.SetLevel(*level)
 	muxer.DebugMode = *debugMode
 
@@ -54,7 +50,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("martian: starting proxy on %s", l.Addr().String())
+	log.Printf("starting proxy on %s", l.Addr().String())
 
 	tr := &http.Transport{
 		Dial: (&net.Dialer{
@@ -95,7 +91,7 @@ func main() {
 			AllowedHostsFilter: func(_ string) bool { return true },
 			// StreamProcessorFactories: spf,
 			EnableDebugLogs: true,
-			DialServerConn:  muxer.NewMuxServerConnDialer(*serverAddr, "smux", 1).DialClientStream,
+			DialServerConn:  muxer.NewMuxServerConnDialer(*serverAddr, "smux", *maxMuxConnections).DialClientStream,
 			// use io.Copy() instead of Martian h2 relay
 			UseBitwiseCopy: true,
 		}
@@ -111,6 +107,6 @@ func main() {
 
 	<-sigc
 
-	log.Println("martian: shutting down")
+	log.Println("shutting down")
 	os.Exit(0)
 }

@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"net"
-	"net/http"
 	_ "net/http/pprof"
 
 	mlog "github.com/google/martian/v3/log"
@@ -35,6 +33,7 @@ func demuxConn(conn net.Conn) {
 }
 
 func listener() {
+	log.Info("starting server on ", *listenAddr)
 	l, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
 		log.Fatal(err)
@@ -50,13 +49,10 @@ func listener() {
 }
 
 func main() {
-	if *pprof {
-		go func() {
-			http.ListenAndServe(fmt.Sprintf("localhost:%d", *pprofPort), nil)
-		}()
-	}
-
 	flag.Parse()
+	if *pprof {
+		go muxer.SpawnPprofServer(*pprofPort)
+	}
 	mlog.SetLevel(*level)
 	muxer.DebugMode = *debugMode
 
