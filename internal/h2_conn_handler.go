@@ -29,6 +29,11 @@ func init() {
 	}
 	defaultHttpClient = &http.Client{
 		Transport: tr,
+		// Disable follow redirect
+		// https://stackoverflow.com/a/38150816/671376
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 }
 
