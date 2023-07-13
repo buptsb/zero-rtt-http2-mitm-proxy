@@ -29,5 +29,6 @@ replace github.com/google/martian/v3 => /home/zc/PROJECTS/tcp/martian-origin
 
 replace github.com/sagernet/sing-mux => /home/zc/PROJECTS/tcp/sing-mux
 
+// replace golang.org/x/net => /home/zc/PROJECTS/tcp/net
 // replace github.com/sagernet/sing => /home/zc/PROJECTS/tcp/sing
 // replace github.com/sagernet/smux => /home/zc/PROJECTS/tcp/smux

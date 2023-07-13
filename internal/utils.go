@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -30,4 +32,8 @@ func SpawnPprofServer(port int) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func IsIgnoredError(err error) bool {
+	return errors.Is(err, context.Canceled)
 }

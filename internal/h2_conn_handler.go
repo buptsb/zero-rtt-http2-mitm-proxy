@@ -16,29 +16,9 @@ const (
 	dumpReqRespSeperator = "=====================\n"
 )
 
-var (
-	defaultHttpClient *http.Client
-)
-
-func init() {
-	tr := &http.Transport{
-		ReadBufferSize: 1 << 16,
-	}
-	if err := http2.ConfigureTransport(tr); err != nil {
-		panic(err)
-	}
-	defaultHttpClient = &http.Client{
-		Transport: tr,
-		// Disable follow redirect
-		// https://stackoverflow.com/a/38150816/671376
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-}
-
 type h2MuxHandler struct {
 	logger log.ContextLogger
+	client *autoFallbackClient
 }
 
 func (h *h2MuxHandler) logError(r *http.Request, desc string, err error) {
@@ -66,9 +46,11 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.dump("== dump request for: ", string(buf), r)
 	}
 
-	resp, err := defaultHttpClient.Do(r)
+	resp, err := h.client.Do(r)
 	if err != nil {
-		h.logError(r, "do request err: ", err)
+		if !IsIgnoredError(err) {
+			h.logError(r, "do request err: ", err)
+		}
 		return
 	}
 	defer resp.Body.Close()
@@ -88,12 +70,16 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 
 		n, err := resp.Body.Read(buf)
 		if err != nil && err != io.EOF {
-			h.logError(r, "body read err: ", err)
+			if !IsIgnoredError(err) {
+				h.logError(r, "body read err: ", err)
+			}
 			return err
 		}
 		if _, werr := w.Write(buf[:n]); werr != nil {
-			h.logError(r, "write err: ", err)
-			return err
+			if err != io.EOF && !IsIgnoredError(werr) {
+				h.logError(r, "write err: ", werr)
+			}
+			return werr
 		}
 		return err
 	}
@@ -105,8 +91,10 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveHTTP2Conn(h2conn net.Conn) error {
+	logger := NewLogger("h2MuxHandler")
 	handler := &h2MuxHandler{
-		logger: NewLogger("h2MuxHandler"),
+		logger: logger,
+		client: newAutoFallbackClient(logger),
 	}
 	server := &http2.Server{}
 	server.ServeConn(h2conn, &http2.ServeConnOpts{
