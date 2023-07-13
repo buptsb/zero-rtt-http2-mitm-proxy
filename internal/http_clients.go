@@ -1,8 +1,8 @@
 package internal
 
 import (
+	"crypto/tls"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/sagernet/sing-box/log"
@@ -21,10 +21,10 @@ type autoFallbackClient struct {
 
 func newAutoFallbackClient(logger log.ContextLogger) *autoFallbackClient {
 	tr1 := &http.Transport{
-		ReadBufferSize: 1 << 16,
-		// TLSClientConfig: &tls.Config{
-		// 	InsecureSkipVerify: true,
-		// },
+		ReadBufferSize:  1 << 16,
+		TLSClientConfig: &tls.Config{
+			// InsecureSkipVerify: true,
+		},
 	}
 	h1Client := &http.Client{
 		Transport: tr1,
@@ -54,7 +54,7 @@ func (c *autoFallbackClient) Do(req *http.Request) (*http.Response, error) {
 		return c.h1Client.Do(req)
 	}
 	resp, err := c.h2Client.Do(req)
-	if err != nil && strings.Contains(err.Error(), "unexpected ALPN protocol") {
+	if err != nil {
 		c.logger.Debug("Domain fallback into HTTP/1.1: ", host)
 		c.h1Hosts.Store(host, true)
 		resp, err = c.h1Client.Do(req)
