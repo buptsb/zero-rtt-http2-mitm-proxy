@@ -46,6 +46,15 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.dump("== dump request for: ", string(buf), r)
 	}
 
+	// Don't send any DATA frame if request does not has any content,
+	// which will send END_STREAM in HEADERS instead of DATA frame.
+	// Fix #2
+	if r.ContentLength == 0 {
+		r.Body = nil
+	} else {
+		defer r.Body.Close()
+	}
+
 	resp, err := h.client.Do(r)
 	if err != nil {
 		if !IsIgnoredError(err) {
