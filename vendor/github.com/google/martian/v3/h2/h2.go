@@ -53,6 +53,8 @@ type Config struct {
 	EnableDebugLogs bool
 
 	DialServerConn func(host string) (net.Conn, error)
+
+	// use io.Copy() instead of per frame forward
 	UseBitwiseCopy bool
 }
 
@@ -90,8 +92,7 @@ func (c *Config) Proxy(closing chan bool, cc io.ReadWriteCloser, url *url.URL) e
 			_, err := io.Copy(sc, cc)
 			errCh <- err
 		}()
-		<-errCh
-		return nil
+		return <-errCh
 	}
 
 	if err := forwardPreface(sc, cc); err != nil {
@@ -146,7 +147,7 @@ func (c *Config) Proxy(closing chan bool, cc io.ReadWriteCloser, url *url.URL) e
 		}
 		shouldCloseCh <- struct{}{}
 	}()
-	// zc: shutdown peer if any one if their realyFrames() call exits
+	// zc: shutdown peer if any one if their relayFrames() call exits
 	go func() {
 		<-shouldCloseCh
 		close(sToC.dieCh)

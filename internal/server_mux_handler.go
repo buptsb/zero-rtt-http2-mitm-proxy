@@ -1,18 +1,30 @@
 package internal
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
+	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"runtime/debug"
 
+	"github.com/google/martian/v3"
 	"github.com/google/martian/v3/h2"
+	"github.com/nadoo/glider/pkg/pool"
 	"github.com/sagernet/sing-box/log"
 	mux "github.com/sagernet/sing-mux"
-	"github.com/sagernet/sing/common/bufio"
+	singBufio "github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
+)
+
+var (
+	// connectionPreface is the constant value of the connection preface.
+	// https://tools.ietf.org/html/rfc7540#section-3.5
+	connectionPreface = []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
 )
 
 var _ mux.ServerHandler = (*muxHandler)(nil)
@@ -36,12 +48,36 @@ func NewMuxHandler(relayType string) *muxHandler {
 }
 
 func (h *muxHandler) NewConnection(ctx context.Context, stream net.Conn, metadata M.Metadata) error {
-	u := &url.URL{
-		Scheme: "https",
-		Host:   metadata.Destination.String(),
+	peekBuf := pool.GetBuffer(len(connectionPreface))
+	defer pool.PutBuffer(peekBuf)
+	_, err := io.ReadFull(stream, peekBuf)
+	if err != nil {
+		return err
 	}
-	h.logger.Debug("== NewConnection to: ", u)
 
+	if bytes.Equal(peekBuf, connectionPreface) {
+		u := &url.URL{
+			Scheme: "https",
+			Host:   metadata.Destination.String(),
+		}
+		pc := &peekedConn{stream, io.MultiReader(bytes.NewReader(peekBuf), stream)}
+		return h.serverH2Conn(ctx, pc, u)
+	} else {
+		return h.serverH1Conn(ctx, stream, peekBuf)
+	}
+}
+
+func (h *muxHandler) serverH1Conn(ctx context.Context, stream net.Conn, peekBuf []byte) error {
+	p := martian.NewProxy()
+	defer p.Close()
+	req := &http.Request{}
+	mctx, _, _ := martian.TestContext(req, nil, nil)
+	brw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
+	brw.Reader.Reset(io.MultiReader(bytes.NewReader(peekBuf), stream))
+	return p.Handle(mctx, stream, brw)
+}
+
+func (h *muxHandler) serverH2Conn(ctx context.Context, stream net.Conn, u *url.URL) error {
 	switch h.relayType {
 	case "bitwise":
 		sc, err := tls.Dial("tcp", u.Host, &tls.Config{
@@ -50,17 +86,17 @@ func (h *muxHandler) NewConnection(ctx context.Context, stream net.Conn, metadat
 		if err != nil {
 			return err
 		}
-		return bufio.CopyConn(ctx, stream, sc)
+		return singBufio.CopyConn(ctx, stream, sc)
 	case "martian":
 		return h.h2Config.Proxy(nil, stream, u)
 	case "h2":
-		return serveHTTP2Conn(stream)
+		return h2Relay(stream)
 	default:
 		panic("unknown relay type")
 	}
 }
 
-func (h *muxHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
+func (h *muxHandler) NewPacketConnection(_ context.Context, _ network.PacketConn, _ M.Metadata) error {
 	panic("not implemented")
 }
 

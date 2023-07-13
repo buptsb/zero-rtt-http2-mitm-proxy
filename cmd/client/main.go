@@ -79,6 +79,8 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+	} else {
+		log.Fatalln("no cert and key provided")
 	}
 
 	if x509c != nil && priv != nil {
@@ -87,16 +89,22 @@ func main() {
 			log.Fatal(err)
 		}
 
+		dialFn := internal.NewMuxServerConnDialer(*serverAddr, "smux", *maxMuxConnections).DialClientStream
+
 		h2Config := &h2.Config{
 			AllowedHostsFilter: func(_ string) bool { return true },
 			// StreamProcessorFactories: spf,
 			EnableDebugLogs: true,
-			DialServerConn:  internal.NewMuxServerConnDialer(*serverAddr, "smux", *maxMuxConnections).DialClientStream,
+			DialServerConn:  dialFn,
 			// use io.Copy() instead of Martian h2 relay
 			UseBitwiseCopy: true,
 		}
 		mc.SetH2Config(h2Config)
 
+		// for http/1.1
+		p.SetDial(func(network, host string) (net.Conn, error) {
+			return dialFn(host)
+		})
 		p.SetMITM(mc)
 	}
 

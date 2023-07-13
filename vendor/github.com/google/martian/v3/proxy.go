@@ -441,6 +441,10 @@ func (p *Proxy) handleConnectRequest(ctx *Context, req *http.Request, session *S
 	return errClose
 }
 
+func (p *Proxy) Handle(ctx *Context, conn net.Conn, brw *bufio.ReadWriter) error {
+	return p.handle(ctx, conn, brw)
+}
+
 func (p *Proxy) handle(ctx *Context, conn net.Conn, brw *bufio.ReadWriter) error {
 	log.Debugf("martian: waiting for request: %v", conn.RemoteAddr())
 

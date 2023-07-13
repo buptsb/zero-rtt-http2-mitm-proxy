@@ -99,7 +99,7 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func serveHTTP2Conn(h2conn net.Conn) error {
+func h2Relay(h2conn net.Conn) error {
 	logger := NewLogger("h2MuxHandler")
 	handler := &h2MuxHandler{
 		logger: logger,
