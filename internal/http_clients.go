@@ -26,21 +26,11 @@ func newAutoFallbackClient(logger log.ContextLogger) *autoFallbackClient {
 			// InsecureSkipVerify: true,
 		},
 	}
-	h1Client := &http.Client{
-		Transport: tr1,
-		// Disable follow redirect
-		// https://stackoverflow.com/a/38150816/671376
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+	h1Client := newHttpClient(tr1)
 	tr2 := &http2.Transport{
 		TLSClientConfig: tr1.TLSClientConfig,
 	}
-	h2Client := &http.Client{
-		Transport:     tr2,
-		CheckRedirect: h1Client.CheckRedirect,
-	}
+	h2Client := newHttpClient(tr2)
 	return &autoFallbackClient{
 		logger:   logger,
 		h1Client: h1Client,
@@ -48,14 +38,14 @@ func newAutoFallbackClient(logger log.ContextLogger) *autoFallbackClient {
 	}
 }
 
-func (c *autoFallbackClient) Do(req *http.Request) (*http.Response, error) {
+func (c *autoFallbackClient) RoundTrip(req *http.Request) (*http.Response, error) {
 	host := req.URL.Hostname()
 	if _, ok := c.h1Hosts.Load(host); ok {
 		return c.h1Client.Do(req)
 	}
 	resp, err := c.h2Client.Do(req)
-	if err != nil {
-		c.logger.Debug("Domain fallback into HTTP/1.1: ", host)
+	if err != nil && !IsNetCancelError(err) {
+		c.logger.Debug("Fallback: Use HTTP/1.1 for ", host, ", reason:", err)
 		c.h1Hosts.Store(host, true)
 		resp, err = c.h1Client.Do(req)
 	}

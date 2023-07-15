@@ -35,7 +35,7 @@ const (
 	initialMaxHeaderTableSize = 4096
 
 	// See: https://tools.ietf.org/html/rfc7540#section-6.9.2
-	defaultInitialWindowSize = 65535
+	defaultInitialWindowSize = 1 << 25
 
 	// headersPriorityMetadataLength is the length of the priority metadata that optionally occurs at
 	// the beginning of the payload of the header frame.
@@ -52,8 +52,7 @@ const (
 
 	// outputChannelSize is the size of the output channel. Roughly, it should be large enough to
 	// allow a window's worth of frames to minimize synchronization overhead.
-	// outputChannelSize = 15
-	outputChannelSize = 100
+	outputChannelSize = 15
 )
 
 // relay encapsulates a flow of h2 traffic in one direction.
@@ -556,17 +555,13 @@ type outputBuffer struct {
 func (w *outputBuffer) emitEligibleFrames(output chan queuedFrame, connectionWindowSize *int) {
 	for e := w.queue.Front(); e != nil; {
 		f := e.Value.(queuedFrame)
-		// zc: disable flow control
-		/*
-			if f.flowControlSize() > *connectionWindowSize || f.flowControlSize() > w.windowSize {
-				break
-			}
-			output <- f
-
-			*connectionWindowSize -= f.flowControlSize()
-			w.windowSize -= f.flowControlSize()
-		*/
+		if f.flowControlSize() > *connectionWindowSize || f.flowControlSize() > w.windowSize {
+			break
+		}
 		output <- f
+
+		*connectionWindowSize -= f.flowControlSize()
+		w.windowSize -= f.flowControlSize()
 
 		next := e.Next()
 		w.queue.Remove(e)

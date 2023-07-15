@@ -25,7 +25,14 @@ var (
 	// connectionPreface is the constant value of the connection preface.
 	// https://tools.ietf.org/html/rfc7540#section-3.5
 	connectionPreface = []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
+
+	httpClient http.RoundTripper
 )
+
+func init() {
+	logger := NewLogger("AutoFallbackClient")
+	httpClient = newAutoFallbackClient(logger)
+}
 
 var _ mux.ServerHandler = (*muxHandler)(nil)
 
@@ -70,8 +77,8 @@ func (h *muxHandler) NewConnection(ctx context.Context, stream net.Conn, metadat
 func (h *muxHandler) serverH1Conn(ctx context.Context, stream net.Conn, peekBuf []byte) error {
 	p := martian.NewProxy()
 	defer p.Close()
-	req := &http.Request{}
-	mctx, _, _ := martian.TestContext(req, nil, nil)
+
+	mctx, _, _ := martian.TestContext(&http.Request{}, nil, nil)
 	brw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	brw.Reader.Reset(io.MultiReader(bytes.NewReader(peekBuf), stream))
 	return p.Handle(mctx, stream, brw)

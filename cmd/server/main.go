@@ -7,7 +7,7 @@ import (
 	_ "net/http/pprof"
 
 	mlog "github.com/google/martian/v3/log"
-	"github.com/sagernet/sing-box/log"
+	slog "github.com/sagernet/sing-box/log"
 	mux "github.com/sagernet/sing-mux"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/zckevin/http2-mitm-proxy/internal"
@@ -33,16 +33,16 @@ func demuxConn(conn net.Conn) {
 }
 
 func listener() {
-	log.Info("starting server on ", *listenAddr)
+	slog.Info("starting server on ", *listenAddr)
 	l, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
-		log.Fatal(err)
+		slog.Fatal(err)
 	}
 	defer l.Close()
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			log.Fatal(err)
+			slog.Fatal(err)
 		}
 		go demuxConn(conn)
 	}
@@ -54,6 +54,11 @@ func main() {
 		go internal.SpawnPprofServer(*pprofPort)
 	}
 	mlog.SetLevel(*level)
+	if *debugMode {
+		internal.LogFactory.SetLevel(slog.LevelDebug)
+	} else {
+		internal.LogFactory.SetLevel(slog.LevelError)
+	}
 	internal.DebugMode = *debugMode
 
 	listener()

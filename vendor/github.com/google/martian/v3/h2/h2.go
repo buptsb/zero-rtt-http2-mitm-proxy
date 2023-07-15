@@ -54,8 +54,8 @@ type Config struct {
 
 	DialServerConn func(host string) (net.Conn, error)
 
-	// use io.Copy() instead of per frame forward
-	UseBitwiseCopy bool
+	// User supplied copy function instead of Martian h2 relay
+	CopyFn func(cc, sc net.Conn) error
 }
 
 // Proxy proxies HTTP/2 traffic between a client connection, `cc`, and the HTTP/2 `url` assuming
@@ -82,17 +82,8 @@ func (c *Config) Proxy(closing chan bool, cc io.ReadWriteCloser, url *url.URL) e
 	}
 	defer sc.Close()
 
-	if c.UseBitwiseCopy {
-		errCh := make(chan error, 2)
-		go func() {
-			_, err := io.Copy(cc, sc)
-			errCh <- err
-		}()
-		go func() {
-			_, err := io.Copy(sc, cc)
-			errCh <- err
-		}()
-		return <-errCh
+	if c.CopyFn != nil {
+		return c.CopyFn(cc.(*tls.Conn), sc)
 	}
 
 	if err := forwardPreface(sc, cc); err != nil {

@@ -54,6 +54,6 @@ func NewMuxServerConnDialer(serverAddr, protocol string, maxConnections int) *Mu
 
 func (d *MuxServerConnDialer) DialClientStream(host string) (net.Conn, error) {
 	addr := M.ParseSocksaddr(host)
-	d.logger.Debug("== DialClientStream err: ", addr)
+	d.logger.Debug("== DialClientStream to: ", addr)
 	return d.muxClient.DialContext(context.TODO(), N.NetworkTCP, addr)
 }

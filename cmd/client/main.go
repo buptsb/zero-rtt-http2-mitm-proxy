@@ -16,6 +16,7 @@ import (
 	"github.com/google/martian/v3/h2"
 	mlog "github.com/google/martian/v3/log"
 	"github.com/google/martian/v3/mitm"
+	slog "github.com/sagernet/sing-box/log"
 	"github.com/zckevin/http2-mitm-proxy/internal"
 )
 
@@ -40,6 +41,11 @@ func main() {
 		go internal.SpawnPprofServer(*pprofPort)
 	}
 	mlog.SetLevel(*level)
+	if *debugMode {
+		internal.LogFactory.SetLevel(slog.LevelDebug)
+	} else {
+		internal.LogFactory.SetLevel(slog.LevelError)
+	}
 	internal.DebugMode = *debugMode
 
 	p := martian.NewProxy()
@@ -96,8 +102,7 @@ func main() {
 			// StreamProcessorFactories: spf,
 			EnableDebugLogs: true,
 			DialServerConn:  dialFn,
-			// use io.Copy() instead of Martian h2 relay
-			UseBitwiseCopy: true,
+			CopyFn:          internal.H2ServerCopy,
 		}
 		mc.SetH2Config(h2Config)
 

@@ -8,25 +8,30 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"strings"
 
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 )
 
 var (
-	DebugMode = false
+	DebugMode  = false
+	LogFactory log.Factory
 )
 
 func NewLogger(name string) log.ContextLogger {
-	logFactory, err := log.New(log.Options{
-		Options: option.LogOptions{
-			Timestamp: true,
-		},
-	})
-	if err != nil {
-		panic(err)
+	if LogFactory == nil {
+		f, err := log.New(log.Options{
+			Options: option.LogOptions{
+				Timestamp: true,
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+		LogFactory = f
 	}
-	return logFactory.NewLogger(name)
+	return LogFactory.NewLogger(name)
 }
 
 func SpawnPprofServer(port int) {
@@ -38,6 +43,10 @@ func SpawnPprofServer(port int) {
 
 func IsIgnoredError(err error) bool {
 	return errors.Is(err, context.Canceled)
+}
+
+func IsNetCancelError(err error) bool {
+	return strings.Contains(err.Error(), "operation was canceled")
 }
 
 // A peekedConn subverts the net.Conn.Read implementation, primarily so that
