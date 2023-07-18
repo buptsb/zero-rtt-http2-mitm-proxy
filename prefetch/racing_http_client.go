@@ -106,6 +106,9 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	defer close(done)
+
 	resultCh := make(chan *racingResult, 2)
 	go func() {
 		client, ok := req.Context().Value("client").(*http.Client)
@@ -121,7 +124,7 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 	go func() {
 		for {
 			select {
-			case <-ctx.Done():
+			case <-done:
 				return
 			case key := <-c.notifyCh:
 				if key.(string) == getCacheKey(req) {
