@@ -18,7 +18,7 @@ type LocalProxy struct {
 
 func NewLocalProxy(serverAddr string) *LocalProxy {
 	muxer := NewMuxServerConnDialer(serverAddr, "smux", 1)
-	pc := prefetch.NewPrefetchClient(muxer.DialNormalStream, muxer.DialPrefetchStream)
+	pc := prefetch.NewPrefetchClient(muxer.DialPrefetchStream)
 	lp := &LocalProxy{
 		pc:    pc,
 		muxer: muxer,

@@ -56,7 +56,7 @@ var _ = Describe("PushChannel", func() {
 		})
 	})
 
-	FContext("client/server", func() {
+	Context("client/server", func() {
 		respUrl := "http://example.com/"
 		newResponse := func(body string) *http.Response {
 			req, _ := http.NewRequest(http.MethodGet, respUrl, nil)
@@ -83,12 +83,11 @@ var _ = Describe("PushChannel", func() {
 				return cc, nil
 			}, pushRespCh)
 			server := NewPushChannelServer(sc)
-			_ = client
 			defer client.Close()
 			defer server.Close()
 
 			dumped, _ := httputil.DumpResponse(newResponse(body), true)
-			for i := 0; i < 2; i++ {
+			for i := 0; i < 3; i++ {
 				go server.Push(context.Background(), newResponse(body))
 
 				resp := <-pushRespCh

@@ -2,8 +2,6 @@ package internal
 
 import (
 	"context"
-	"errors"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -80,6 +78,8 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		err  error
 	)
 	if !h.isServerSide && h.pc.FilterRequest(r) {
+		// add client to context for prefetch's racing http client
+		r = r.WithContext(context.WithValue(r.Context(), "client", h.client))
 		resp, err = h.pc.Do(r)
 	} else {
 		resp, err = h.client.Do(r)
@@ -112,8 +112,8 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		buf, _ := httputil.DumpResponse(resp, false)
 		h.dump("== dump response for: ", string(buf), r)
 	}
-	if err := common.CopyResponse(w, resp); err != nil && !common.IsIgnoredError(err) && !errors.Is(err, io.EOF) {
-		h.logError(r, "", err)
+	if err := common.CopyResponse(w, resp); err != nil /* && !errors.Is(err, io.EOF) */ {
+		h.logError(r, "CopyResponse err: ", err)
 	}
 }
 

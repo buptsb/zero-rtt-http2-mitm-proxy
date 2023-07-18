@@ -2,7 +2,6 @@ package common
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net/http"
 	"sync"
 
@@ -51,7 +50,6 @@ func (c *AutoFallbackClient) Do(req *http.Request) (*http.Response, error) {
 		c.h1Hosts.Store(host, true)
 		resp, err = c.h1Client.Do(req)
 	}
-	fmt.Println("== resp:", resp.ContentLength)
 	return resp, err
 }
 

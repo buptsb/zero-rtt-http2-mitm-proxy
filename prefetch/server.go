@@ -2,7 +2,6 @@ package prefetch
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -20,11 +19,11 @@ var (
 func init() {
 	defaultPrefetchRequestHeaders = http.Header{}
 	kvs := [][]string{
-		[]string{"accept", "*/*"},
-		[]string{"cache-control", "public"},
-		[]string{"accept-encoding", "gzip, deflate, br"},
-		[]string{"accept-language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7"},
-		[]string{"user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"},
+		{"accept", "*/*"},
+		{"cache-control", "public"},
+		{"accept-encoding", "gzip, deflate, br"},
+		{"accept-language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7"},
+		{"user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"},
 	}
 	for _, kv := range kvs {
 		defaultPrefetchRequestHeaders.Set(kv[0], kv[1])
@@ -120,11 +119,13 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 			ps.logger.Debug(targetUrl, ": flying")
 			return
 		}
-		if ps.cache.Exists(getCacheKey(req)) {
-			ps.logger.Debug(fmt.Sprintf("[doc:%s, resource: %s]", docUrl, targetUrl), ": cached")
-			ps.logger.Debug(targetUrl, ": cached")
-			return
-		}
+		/*
+			if ps.cache.Exists(getCacheKey(req)) {
+				ps.logger.Debug(fmt.Sprintf("[doc:%s, resource: %s]", docUrl, targetUrl), ": cached")
+				ps.logger.Debug(targetUrl, ": cached")
+				return
+			}
+		*/
 
 		go func() error {
 			ps.flyingResps.Add(req)

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	broadcast "github.com/dustin/go-broadcast"
-	"github.com/zckevin/http2-mitm-proxy/common"
 )
 
 const (
@@ -75,13 +74,12 @@ func (c *racingHTTPClientFactory) getCachedResp(req *http.Request) *http.Respons
 	return nil
 }
 
-func (c *racingHTTPClientFactory) CreateRacingHTTPClient(baseClient common.HTTPRequestDoer) *racingHTTPClient {
+func (c *racingHTTPClientFactory) CreateRacingHTTPClient() *racingHTTPClient {
 	notifyCh := make(chan interface{})
 	c.broadcaster.Register(notifyCh)
 	return &racingHTTPClient{
-		factory:    c,
-		baseClient: baseClient,
-		notifyCh:   notifyCh,
+		factory:  c,
+		notifyCh: notifyCh,
 	}
 }
 
@@ -91,31 +89,34 @@ func (c *racingHTTPClientFactory) Close() error {
 }
 
 type racingResult struct {
-	resp *http.Response
-	err  error
+	resp   *http.Response
+	err    error
+	isPush bool
 }
 
 type racingHTTPClient struct {
-	factory    *racingHTTPClientFactory
-	baseClient common.HTTPRequestDoer
-	notifyCh   chan interface{}
+	factory  *racingHTTPClientFactory
+	notifyCh chan interface{}
 }
 
 func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	if cachedResp := c.factory.getCachedResp(req); cachedResp != nil {
-		fmt.Println("1")
+		// fmt.Println("1")
 		return cachedResp, nil
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan *racingResult, 2)
 	go func() {
+		client, ok := req.Context().Value("client").(*http.Client)
+		if !ok {
+			resultCh <- &racingResult{nil, fmt.Errorf("racingHTTPClient: client not found in request context"), false}
+			return
+		}
 		req = req.WithContext(ctx)
-		// req.Header.Set("cache-control", "no-cache")
-		resp, err := c.baseClient.Do(req)
-		fmt.Println("2", err)
-		resultCh <- &racingResult{resp, err}
+		resp, err := client.Do(req)
+		// fmt.Println("2", err)
+		resultCh <- &racingResult{resp, err, false}
 	}()
 	go func() {
 		for {
@@ -124,8 +125,8 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 				return
 			case key := <-c.notifyCh:
 				if key.(string) == getCacheKey(req) {
-					fmt.Println("3")
-					resultCh <- &racingResult{c.factory.getCachedResp(req), nil}
+					// fmt.Println("3")
+					resultCh <- &racingResult{c.factory.getCachedResp(req), nil, true}
 					return
 				}
 			}
@@ -138,10 +139,13 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 			if result.resp.StatusCode == StatusRequestBeingPrefetched {
 				continue
 			}
+			if result.isPush {
+				cancel()
+			}
 			return result.resp, result.err
 		}
 	}
-	return nil, fmt.Errorf("racingHTTPClient: both results are nil")
+	panic("unreachable")
 }
 
 func (c *racingHTTPClient) Close() error {

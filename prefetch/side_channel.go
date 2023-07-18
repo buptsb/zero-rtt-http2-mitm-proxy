@@ -38,7 +38,7 @@ func NewPushChannelClient(dialFn func(string) (net.Conn, error), pushRespCh chan
 	return pc
 }
 
-func (pc *PushChannelClient) handleStream(ctx context.Context, stream net.Conn, metadata M.Metadata) error {
+func (pc *PushChannelClient) servePushStream(ctx context.Context, stream net.Conn, metadata M.Metadata) error {
 	var hdr PushResponseHeader
 	dec := binary.NewDecoder(stream)
 	if err := dec.Decode(&hdr); err != nil {
@@ -51,7 +51,6 @@ func (pc *PushChannelClient) handleStream(ctx context.Context, stream net.Conn, 
 		return fmt.Errorf("failed to read response: %w", err)
 	}
 	waitForBodyEof := make(chan error, 1)
-	fmt.Println("=====", resp.ContentLength, resp.Header)
 	resp.Body = eofsignal.NewBodyEOFSignal(resp.Body, func(err error) error {
 		waitForBodyEof <- stream.Close()
 		return err
@@ -62,14 +61,14 @@ func (pc *PushChannelClient) handleStream(ctx context.Context, stream net.Conn, 
 
 func (pc *PushChannelClient) run(ctx context.Context) error {
 	for {
-		conn, err := pc.dialFn("")
+		conn, err := pc.dialFn("pushChannelClient")
 		if err != nil {
 			fmt.Println("dial side channel error: ", err)
 			time.Sleep(time.Second)
 			continue
 		}
 		logger := common.NewLogger("pushChannelClient")
-		handler := &pushStreamHandler{pc.handleStream}
+		handler := &pushStreamHandler{pc.servePushStream}
 		err = mux.HandleConnection(ctx, handler, logger, conn, M.Metadata{})
 		if err != nil && errors.Is(err, io.EOF) {
 			logger.Error("pushChannelClient stop, err: ", err)
@@ -115,10 +114,7 @@ func (ps *PushChannelServer) Push(ctx context.Context, resp *http.Response) erro
 		return err
 	}
 	defer resp.Body.Close()
-	// stream should be closed by the receiver
-	/*
-		defer st.Close()
-	*/
+	defer st.Close()
 
 	dumped, _ := httputil.DumpResponse(resp, false)
 	hdr := &PushResponseHeader{
@@ -128,8 +124,12 @@ func (ps *PushChannelServer) Push(ctx context.Context, resp *http.Response) erro
 	if err := binary.MarshalTo(hdr, st); err != nil {
 		return fmt.Errorf("failed to marshal PushResponseHeader: %w", err)
 	}
-	if _, err := io.Copy(st, resp.Body); err != nil {
+	if n, err := io.Copy(st, resp.Body); err != nil {
 		return fmt.Errorf("failed to copy body: %w", err)
+	} else {
+		if resp.ContentLength != -1 && n != resp.ContentLength {
+			panic(fmt.Sprintf("content length mismatch, expect %d, got %d", resp.ContentLength, n))
+		}
 	}
 	return nil
 }

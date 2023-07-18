@@ -81,6 +81,7 @@ func (h *muxHandler) servePrefetchConn(ctx context.Context, stream net.Conn) err
 		onEOF <- err
 	})
 	h.ps.CreatePushChannel(conn)
+	// wait until the stream is EOFed
 	return <-onEOF
 }
 
@@ -141,5 +142,5 @@ func (h *muxHandler) NewError(ctx context.Context, err error) {
 	if common.DebugMode {
 		debug.PrintStack()
 	}
-	h.logger.Error("muxHandler error: ", err)
+	// h.logger.Error("muxHandler error: ", err)
 }
