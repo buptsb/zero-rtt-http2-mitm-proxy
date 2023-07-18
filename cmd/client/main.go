@@ -17,6 +17,7 @@ import (
 	mlog "github.com/google/martian/v3/log"
 	"github.com/google/martian/v3/mitm"
 	slog "github.com/sagernet/sing-box/log"
+	"github.com/zckevin/http2-mitm-proxy/common"
 	"github.com/zckevin/http2-mitm-proxy/internal"
 )
 
@@ -32,21 +33,23 @@ var (
 	listenAddr = flag.String("addr", ":8080", "host:port of the proxy")
 	serverAddr = flag.String("server-addr", "", "proxy server address")
 
-	maxMuxConnections = flag.Int("max-mux-connections", 1, "max tcp connections for each internal")
+	// maxMuxConnections = flag.Int("max-mux-connections", 1, "max tcp connections for each internal")
 )
 
 func main() {
 	flag.Parse()
 	if *pprof {
-		go internal.SpawnPprofServer(*pprofPort)
+		go common.SpawnPprofServer(*pprofPort)
 	}
-	mlog.SetLevel(*level)
+	// mlog.SetLevel(*level)
+	mlog.SetLevel(0)
 	if *debugMode {
-		internal.LogFactory.SetLevel(slog.LevelDebug)
+		common.LogFactory.SetLevel(slog.LevelDebug)
 	} else {
-		internal.LogFactory.SetLevel(slog.LevelError)
+		// common.LogFactory.SetLevel(slog.LevelError)
+		common.LogFactory.SetLevel(slog.LevelDebug)
 	}
-	internal.DebugMode = *debugMode
+	common.DebugMode = *debugMode
 
 	p := martian.NewProxy()
 	defer p.Close()
@@ -95,20 +98,21 @@ func main() {
 			log.Fatal(err)
 		}
 
-		dialFn := internal.NewMuxServerConnDialer(*serverAddr, "smux", *maxMuxConnections).DialClientStream
+		// dialFn := internal.NewMuxServerConnDialer(*serverAddr, "smux", 1).DialNormalStream
+		lp := internal.NewLocalProxy(*serverAddr)
 
 		h2Config := &h2.Config{
 			AllowedHostsFilter: func(_ string) bool { return true },
 			// StreamProcessorFactories: spf,
 			EnableDebugLogs: true,
-			DialServerConn:  dialFn,
-			CopyFn:          internal.H2ServerCopy,
+			DialServerConn:  lp.DialNormalStream,
+			CopyFn:          lp.H2ServerCopy,
 		}
 		mc.SetH2Config(h2Config)
 
 		// for http/1.1
 		p.SetDial(func(network, host string) (net.Conn, error) {
-			return dialFn(host)
+			return lp.DialNormalStream(host)
 		})
 		p.SetMITM(mc)
 	}

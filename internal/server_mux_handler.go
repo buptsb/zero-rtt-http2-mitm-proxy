@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -19,6 +20,9 @@ import (
 	singBufio "github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
+	eofsignal "github.com/zckevin/go-libs/eof_signal"
+	"github.com/zckevin/http2-mitm-proxy/common"
+	"github.com/zckevin/http2-mitm-proxy/prefetch"
 )
 
 var (
@@ -26,12 +30,11 @@ var (
 	// https://tools.ietf.org/html/rfc7540#section-3.5
 	connectionPreface = []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
 
-	httpClient http.RoundTripper
+	httpClient common.HTTPRequestDoer
 )
 
 func init() {
-	logger := NewLogger("AutoFallbackClient")
-	httpClient = newAutoFallbackClient(logger)
+	httpClient = common.NewAutoFallbackClient()
 }
 
 var _ mux.ServerHandler = (*muxHandler)(nil)
@@ -40,6 +43,8 @@ type muxHandler struct {
 	relayType string
 	h2Config  *h2.Config
 	logger    log.ContextLogger
+
+	ps *prefetch.PrefetchServer
 }
 
 func NewMuxHandler(relayType string) *muxHandler {
@@ -50,11 +55,36 @@ func NewMuxHandler(relayType string) *muxHandler {
 	return &muxHandler{
 		relayType: relayType,
 		h2Config:  h2Config,
-		logger:    NewLogger("muxerHandler"),
+		logger:    common.NewLogger("muxerHandler"),
+		ps:        prefetch.NewPrefetchServer(),
 	}
 }
 
 func (h *muxHandler) NewConnection(ctx context.Context, stream net.Conn, metadata M.Metadata) error {
+	handshakeMsg, err := UnmarshalHandshakeMsg(stream)
+	if err != nil {
+		return err
+	}
+	switch handshakeMsg.StreamType {
+	case StreamTypeNormal:
+		return h.serveNormalConn(ctx, stream, metadata)
+	case StreamTypePrefetch:
+		return h.servePrefetchConn(ctx, stream)
+	default:
+		return fmt.Errorf("unknown stream type: %d", handshakeMsg.StreamType)
+	}
+}
+
+func (h *muxHandler) servePrefetchConn(ctx context.Context, stream net.Conn) error {
+	onEOF := make(chan error, 1)
+	conn := eofsignal.NewEOFSignalConn(stream, func(err error) {
+		onEOF <- err
+	})
+	h.ps.CreatePushChannel(conn)
+	return <-onEOF
+}
+
+func (h *muxHandler) serveNormalConn(ctx context.Context, stream net.Conn, metadata M.Metadata) error {
 	peekBuf := pool.GetBuffer(len(connectionPreface))
 	defer pool.PutBuffer(peekBuf)
 	_, err := io.ReadFull(stream, peekBuf)
@@ -67,14 +97,14 @@ func (h *muxHandler) NewConnection(ctx context.Context, stream net.Conn, metadat
 			Scheme: "https",
 			Host:   metadata.Destination.String(),
 		}
-		pc := &peekedConn{stream, io.MultiReader(bytes.NewReader(peekBuf), stream)}
-		return h.serverH2Conn(ctx, pc, u)
+		pc := common.NewPeekedConn(stream, io.MultiReader(bytes.NewReader(peekBuf), stream))
+		return h.serveH2Conn(ctx, pc, u)
 	} else {
-		return h.serverH1Conn(ctx, stream, peekBuf)
+		return h.serveH1Conn(ctx, stream, peekBuf)
 	}
 }
 
-func (h *muxHandler) serverH1Conn(ctx context.Context, stream net.Conn, peekBuf []byte) error {
+func (h *muxHandler) serveH1Conn(ctx context.Context, stream net.Conn, peekBuf []byte) error {
 	p := martian.NewProxy()
 	defer p.Close()
 
@@ -84,7 +114,7 @@ func (h *muxHandler) serverH1Conn(ctx context.Context, stream net.Conn, peekBuf 
 	return p.Handle(mctx, stream, brw)
 }
 
-func (h *muxHandler) serverH2Conn(ctx context.Context, stream net.Conn, u *url.URL) error {
+func (h *muxHandler) serveH2Conn(ctx context.Context, stream net.Conn, u *url.URL) error {
 	switch h.relayType {
 	case "bitwise":
 		sc, err := tls.Dial("tcp", u.Host, &tls.Config{
@@ -97,7 +127,7 @@ func (h *muxHandler) serverH2Conn(ctx context.Context, stream net.Conn, u *url.U
 	case "martian":
 		return h.h2Config.Proxy(nil, stream, u)
 	case "h2":
-		return h2Relay(stream)
+		return createServerSideH2Relay(stream, httpClient, h.ps)
 	default:
 		panic("unknown relay type")
 	}
@@ -108,7 +138,7 @@ func (h *muxHandler) NewPacketConnection(_ context.Context, _ network.PacketConn
 }
 
 func (h *muxHandler) NewError(ctx context.Context, err error) {
-	if DebugMode {
+	if common.DebugMode {
 		debug.PrintStack()
 	}
 	h.logger.Error("muxHandler error: ", err)

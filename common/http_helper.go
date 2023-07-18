@@ -1,7 +1,6 @@
-package internal
+package common
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 
@@ -9,7 +8,11 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func fixRequest(r *http.Request) {
+type HTTPRequestDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+func FixRequest(r *http.Request) {
 	// only in response request, need to reset for sending
 	r.RequestURI = ""
 
@@ -25,41 +28,19 @@ func fixRequest(r *http.Request) {
 	}
 }
 
-func copyResponse(w http.ResponseWriter, resp *http.Response) error {
+func CopyResponse(w http.ResponseWriter, resp *http.Response) error {
 	// copy headers
 	maps.Copy(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 
-	fn := func() error {
-		buf := pool.GetBuffer(4096)
-		defer pool.PutBuffer(buf)
-
-		n, err := resp.Body.Read(buf)
-		if err != nil && err != io.EOF {
-			if !IsIgnoredError(err) {
-				return fmt.Errorf("body read err: %w", err)
-			}
-			return err
-		}
-		if n > 0 {
-			if _, werr := w.Write(buf[:n]); werr != nil {
-				if err != io.EOF && !IsIgnoredError(werr) {
-					return fmt.Errorf("write err: %w", werr)
-				}
-				return werr
-			}
-		}
-		return err
-	}
-	for {
-		if err := fn(); err != nil {
-			return err
-		}
-	}
+	buf := pool.GetBuffer(4096)
+	defer pool.PutBuffer(buf)
+	_, err := io.CopyBuffer(w, resp.Body, buf)
+	return err
 }
 
-func newHttpClient(tr http.RoundTripper) *http.Client {
-	return &http.Client{
+func NewHttpClient(tr http.RoundTripper) *http.Client {
+	cl := &http.Client{
 		Transport: tr,
 		// Disable follow redirect
 		// https://stackoverflow.com/a/38150816/671376
@@ -67,4 +48,5 @@ func newHttpClient(tr http.RoundTripper) *http.Client {
 			return http.ErrUseLastResponse
 		},
 	}
+	return cl
 }

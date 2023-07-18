@@ -22,3 +22,6 @@ start-server-vvv:
 
 start-client-debug:
   go run ./cmd/client --log-level={{log_level}} {{cert}} --server-addr={{server_addr}} --debug
+
+start-prefetch-static-server:
+  ran -b 127.0.0.1 -tls-port=2001 {{cert}} -r ./tmp

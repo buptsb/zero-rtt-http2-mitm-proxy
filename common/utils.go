@@ -1,11 +1,10 @@
-package internal
+package common
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"strings"
@@ -49,14 +48,8 @@ func IsNetCancelError(err error) bool {
 	return strings.Contains(err.Error(), "operation was canceled")
 }
 
-// A peekedConn subverts the net.Conn.Read implementation, primarily so that
-// sniffed bytes can be transparently prepended.
-type peekedConn struct {
-	net.Conn
-	r io.Reader
+func RandomString(length int) string {
+	b := make([]byte, length+2)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)[2 : length+2]
 }
-
-// Read allows control over the embedded net.Conn's read data. By using an
-// io.MultiReader one can read from a conn, and then replace what they read, to
-// be read again.
-func (c *peekedConn) Read(buf []byte) (int, error) { return c.r.Read(buf) }

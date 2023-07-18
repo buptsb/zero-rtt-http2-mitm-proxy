@@ -1,7 +1,8 @@
-package internal
+package common
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -10,7 +11,7 @@ import (
 )
 
 // use http2 first and fallback to http1.1 if failed
-type autoFallbackClient struct {
+type AutoFallbackClient struct {
 	logger log.ContextLogger
 
 	h1Client *http.Client
@@ -19,26 +20,27 @@ type autoFallbackClient struct {
 	h1Hosts sync.Map
 }
 
-func newAutoFallbackClient(logger log.ContextLogger) *autoFallbackClient {
+func NewAutoFallbackClient() *AutoFallbackClient {
 	tr1 := &http.Transport{
-		ReadBufferSize:  1 << 16,
+		ReadBufferSize: 1 << 16,
 		TLSClientConfig: &tls.Config{
-			// InsecureSkipVerify: true,
+			InsecureSkipVerify: true,
 		},
 	}
-	h1Client := newHttpClient(tr1)
+	h1Client := NewHttpClient(tr1)
 	tr2 := &http2.Transport{
 		TLSClientConfig: tr1.TLSClientConfig,
 	}
-	h2Client := newHttpClient(tr2)
-	return &autoFallbackClient{
-		logger:   logger,
+	h2Client := NewHttpClient(tr2)
+	cl := &AutoFallbackClient{
+		logger:   NewLogger("AutoFallbackClient"),
 		h1Client: h1Client,
 		h2Client: h2Client,
 	}
+	return cl
 }
 
-func (c *autoFallbackClient) RoundTrip(req *http.Request) (*http.Response, error) {
+func (c *AutoFallbackClient) Do(req *http.Request) (*http.Response, error) {
 	host := req.URL.Hostname()
 	if _, ok := c.h1Hosts.Load(host); ok {
 		return c.h1Client.Do(req)
@@ -49,5 +51,10 @@ func (c *autoFallbackClient) RoundTrip(req *http.Request) (*http.Response, error
 		c.h1Hosts.Store(host, true)
 		resp, err = c.h1Client.Do(req)
 	}
+	fmt.Println("== resp:", resp.ContentLength)
 	return resp, err
+}
+
+func (c *AutoFallbackClient) RoundTrip(req *http.Request) (*http.Response, error) {
+	return c.Do(req)
 }
