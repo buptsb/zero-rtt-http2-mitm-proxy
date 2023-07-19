@@ -69,6 +69,8 @@ type PrefetchServer struct {
 	cache       *httpcache.MemoryCache
 	flyingResps *flyingHTTPResponseCache
 
+	ttlHistory *common.TTLCache
+
 	// only one push channel is allowed for now
 	channel *PushChannelServer
 }
@@ -83,6 +85,7 @@ func NewPrefetchServer() *PrefetchServer {
 		cache:       cache,
 		httpClient:  common.NewHttpClient(trWithHTTPCache),
 		flyingResps: newFlyingHTTPResponseCache(),
+		ttlHistory:  common.NewTTLCache(time.Second*5, time.Minute),
 	}
 }
 
@@ -111,6 +114,11 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 		return
 	}
 	docUrl := resp.Request.URL.String()
+	if _, ok := ps.ttlHistory.Get(docUrl); ok {
+		return
+	}
+	defer ps.ttlHistory.Set(docUrl, struct{}{})
+
 	urls, err := htmlparser.ExtractResourcesInHead(resp)
 	if err != nil {
 		ps.logger.Error(err)
