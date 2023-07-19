@@ -43,10 +43,10 @@ func (lp *LocalProxy) BitwiseCopy(cc, sc net.Conn) error {
 	return <-errCh
 }
 
-func (lp *LocalProxy) H2ServerCopy(cc, sc net.Conn) error {
+func (lp *LocalProxy) H2ServerCopy(cc net.Conn) error {
 	tr := &http2.Transport{
 		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
-			return sc, nil
+			return lp.DialNormalStream("")
 		},
 	}
 	baseClient := common.NewHttpClient(tr)
