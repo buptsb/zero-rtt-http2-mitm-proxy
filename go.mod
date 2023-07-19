@@ -5,7 +5,6 @@ go 1.20
 require (
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/dolmen-go/contextio v1.0.0
-	github.com/dustin/go-broadcast v0.0.0-20211018055107-71439988bd91
 	github.com/golang/mock v1.6.0
 	github.com/google/brotli/go/cbrotli v0.0.0-20230718122413-4b827e4ce47b
 	github.com/google/martian/v3 v3.3.2

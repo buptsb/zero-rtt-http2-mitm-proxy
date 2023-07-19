@@ -3,32 +3,15 @@ package prefetch
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
-	"sync"
-	"time"
-
-	broadcast "github.com/dustin/go-broadcast"
 )
-
-const (
-	StatusRequestBeingPrefetched = http.StatusConflict
-	cachedResponseTTL            = time.Second * 3
-)
-
-type cachedResponse struct {
-	resp     *http.Response
-	expireAt time.Time
-}
 
 // TODO: remove this
 type racingHTTPClientFactory struct {
 	pushRespCh chan *http.Response
 	closedCh   chan struct{}
-
-	mu    sync.Mutex
-	cache map[string]cachedResponse
-
-	broadcaster broadcast.Broadcaster
+	cache      *respCache
 }
 
 func getCacheKey(req *http.Request) string {
@@ -37,10 +20,9 @@ func getCacheKey(req *http.Request) string {
 
 func newRacingHTTPClientFactory(pushRespCh chan *http.Response) *racingHTTPClientFactory {
 	cl := &racingHTTPClientFactory{
-		pushRespCh:  pushRespCh,
-		closedCh:    make(chan struct{}),
-		cache:       make(map[string]cachedResponse),
-		broadcaster: broadcast.NewBroadcaster(128),
+		pushRespCh: pushRespCh,
+		closedCh:   make(chan struct{}),
+		cache:      newRespCache(),
 	}
 	go func() {
 		for {
@@ -48,38 +30,17 @@ func newRacingHTTPClientFactory(pushRespCh chan *http.Response) *racingHTTPClien
 			case <-cl.closedCh:
 				return
 			case resp := <-cl.pushRespCh:
-				key := getCacheKey(resp.Request)
-				fmt.Println("=== recv push resp ===", key)
-				cl.mu.Lock()
-				cl.cache[key] = cachedResponse{resp, time.Now().Add(cachedResponseTTL)}
-				cl.mu.Unlock()
-				cl.broadcaster.Submit(key)
+				log.Println("=== recv push resp ===", resp.Request.URL)
+				cl.cache.Add(resp)
 			}
 		}
 	}()
 	return cl
 }
 
-func (c *racingHTTPClientFactory) getCachedResp(req *http.Request) *http.Response {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	key := getCacheKey(req)
-	if item, ok := c.cache[key]; ok {
-		defer delete(c.cache, key)
-		if time.Now().Before(item.expireAt) {
-			return item.resp
-		}
-	}
-	return nil
-}
-
 func (c *racingHTTPClientFactory) CreateRacingHTTPClient() *racingHTTPClient {
-	notifyCh := make(chan interface{})
-	c.broadcaster.Register(notifyCh)
 	return &racingHTTPClient{
-		factory:  c,
-		notifyCh: notifyCh,
+		factory: c,
 	}
 }
 
@@ -95,21 +56,25 @@ type racingResult struct {
 }
 
 type racingHTTPClient struct {
-	factory  *racingHTTPClientFactory
-	notifyCh chan interface{}
+	factory *racingHTTPClientFactory
 }
 
 func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) {
-	if cachedResp := c.factory.getCachedResp(req); cachedResp != nil {
-		// fmt.Println("1")
+	// 1. check cache, if cached, return; else create a listener for server push
+	cachedResp, ln := c.factory.cache.GetOrCreateListener(req)
+	if cachedResp != nil {
+		log.Println("1", req.URL)
 		return cachedResp, nil
 	}
+	defer ln.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	defer close(done)
 
 	resultCh := make(chan *racingResult, 2)
+	// 2. send request using the same http client with other non-prefetched requests,
+	// 	which would dial mux stream to server proxy
 	go func() {
 		client, ok := req.Context().Value("client").(*http.Client)
 		if !ok {
@@ -118,40 +83,35 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 		}
 		req = req.WithContext(ctx)
 		resp, err := client.Do(req)
-		// fmt.Println("2", err)
+		log.Println("2", req.URL)
 		resultCh <- &racingResult{resp, err, false}
 	}()
+	// 3. listen for server push
 	go func() {
 		for {
 			select {
+			// if done is closed, it means the function is returned, we could return safely
 			case <-done:
 				return
-			case key := <-c.notifyCh:
-				if key.(string) == getCacheKey(req) {
-					// fmt.Println("3")
-					resultCh <- &racingResult{c.factory.getCachedResp(req), nil, true}
-					return
-				}
+			case <-ln.ch:
+				resultCh <- &racingResult{c.factory.cache.Get(req), nil, true}
+				log.Println("3", req.URL)
+				return
 			}
 		}
 	}()
 
-	for i := 0; i < 2; i++ {
-		result := <-resultCh
-		if result.resp != nil {
-			if result.resp.StatusCode == StatusRequestBeingPrefetched {
-				continue
-			}
-			if result.isPush {
-				cancel()
-			}
-			return result.resp, result.err
-		}
+	// 4. race for the result, if client.Do() return first we consider that no push resp will arrive
+	result := <-resultCh
+	// cancel the client.Do() request if we got a push response
+	if result.isPush {
+		cancel()
 	}
-	panic("unreachable")
+	// else if client.Do() return first, we consider that no push resp will arrive,
+	// so just use its resp and err
+	return result.resp, result.err
 }
 
 func (c *racingHTTPClient) Close() error {
-	c.factory.broadcaster.Unregister(c.notifyCh)
 	return nil
 }
