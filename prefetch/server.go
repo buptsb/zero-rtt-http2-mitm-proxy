@@ -2,6 +2,7 @@ package prefetch
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/gregjones/httpcache"
 	"github.com/sagernet/sing-box/log"
 	"github.com/zckevin/http2-mitm-proxy/common"
+	htmlparser "github.com/zckevin/http2-mitm-proxy/prefetch/html_parser"
 )
 
 var (
@@ -21,7 +23,7 @@ func init() {
 	kvs := [][]string{
 		{"accept", "*/*"},
 		{"cache-control", "public"},
-		{"accept-encoding", "gzip, deflate, br"},
+		{"accept-encoding", "gzip, br"},
 		{"accept-language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7"},
 		{"user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"},
 	}
@@ -109,8 +111,12 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 		return
 	}
 	docUrl := resp.Request.URL.String()
-	ps.logger.Debug("prefetch doc: ", docUrl)
-	urls := ExtractResources(resp)
+	urls, err := htmlparser.ExtractResourcesInHead(resp)
+	if err != nil {
+		ps.logger.Error(err)
+		return
+	}
+	ps.logger.Info(fmt.Sprintln("prefetch doc: ", docUrl, ", resources: ", urls))
 
 	fn := func(targetUrl string) {
 		req := ps.buildPrefetchRequest(ctx, targetUrl)

@@ -3,9 +3,11 @@ module github.com/zckevin/http2-mitm-proxy
 go 1.20
 
 require (
+	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/dolmen-go/contextio v1.0.0
 	github.com/dustin/go-broadcast v0.0.0-20211018055107-71439988bd91
 	github.com/golang/mock v1.6.0
+	github.com/google/brotli/go/cbrotli v0.0.0-20230718122413-4b827e4ce47b
 	github.com/google/martian/v3 v3.3.2
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79
 	github.com/kelindar/binary v1.0.17
@@ -21,6 +23,7 @@ require (
 )
 
 require (
+	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
