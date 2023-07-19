@@ -38,18 +38,20 @@ func NewPushChannelClient(dialFn func(string) (net.Conn, error), pushRespCh chan
 	return pc
 }
 
+// serve server initiated push stream
 func (pc *PushChannelClient) servePushStream(ctx context.Context, stream net.Conn, metadata M.Metadata) error {
 	var hdr PushResponseHeader
 	dec := binary.NewDecoder(stream)
 	if err := dec.Decode(&hdr); err != nil {
 		return fmt.Errorf("failed to decode PushResponseHeader: %w", err)
 	}
-	req, _ := http.NewRequest(http.MethodGet, hdr.UrlString, nil)
-	r := io.MultiReader(bytes.NewBuffer(hdr.ResponseWithoutBody), ctxio.NewReader(ctx, stream))
-	resp, err := http.ReadResponse(bufio.NewReader(r), req)
+	req := buildRequest(context.Background(), hdr.UrlString)
+	mr := io.MultiReader(bytes.NewBuffer(hdr.ResponseWithoutBody), ctxio.NewReader(ctx, stream))
+	resp, err := http.ReadResponse(bufio.NewReader(mr), req)
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
+	// smux stream handler would close stream after return, so we have to wait for body EOF
 	waitForBodyEof := make(chan error, 1)
 	resp.Body = eofsignal.NewBodyEOFSignal(resp.Body, func(err error) error {
 		waitForBodyEof <- stream.Close()

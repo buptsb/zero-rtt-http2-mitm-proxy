@@ -40,8 +40,8 @@ func (pc *PrefetchClient) createHTTPClient() common.HTTPRequestDoer {
 }
 
 func filterResourceExtension(u *url.URL) bool {
-	return filepath.Ext(u.Path) == ".js" ||
-		filepath.Ext(u.Path) == ".css"
+	ext := filepath.Ext(u.Path)
+	return ext == ".js" || ext == ".css"
 }
 
 func (pc *PrefetchClient) FilterRequest(req *http.Request) (result bool) {

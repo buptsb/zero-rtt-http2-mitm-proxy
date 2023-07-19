@@ -85,15 +85,6 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		resp, err = h.client.Do(r)
 	}
 
-	/*
-		if h.isServerSide {
-			if h.ps.RequestAlreadyPrefeched(r) {
-				w.WriteHeader(prefetch.StatusRequestBeingPrefetched)
-				return
-			}
-		}
-	*/
-
 	if err != nil {
 		if !common.IsIgnoredError(err) {
 			h.logError(r, "do request err: ", err)

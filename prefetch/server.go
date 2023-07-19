@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gregjones/httpcache"
 	"github.com/sagernet/sing-box/log"
@@ -23,7 +25,7 @@ func init() {
 	kvs := [][]string{
 		{"accept", "*/*"},
 		{"cache-control", "public"},
-		{"accept-encoding", "gzip, br"},
+		{"accept-encoding", "gzip, deflate, br"},
 		{"accept-language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7"},
 		{"user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"},
 	}
@@ -102,11 +104,28 @@ func filterPrefetchableDocumentResponse(resp *http.Response) bool {
 		strings.Contains(resp.Header.Get("Content-Type"), "text/html")
 }
 
-func (ps *PrefetchServer) buildPrefetchRequest(ctx context.Context, targetUrl string) *http.Request {
-	req, _ := http.NewRequest(http.MethodGet, targetUrl, nil)
+func buildRequest(ctx context.Context, targetUrlStr string) *http.Request {
+	req, _ := http.NewRequest(http.MethodGet, targetUrlStr, nil)
 	req.Header = defaultPrefetchRequestHeaders.Clone()
-	req = req.WithContext(ctx)
-	return req
+	return req.WithContext(ctx)
+}
+
+func (ps *PrefetchServer) buildPrefetchRequest(ctx context.Context, targetUrlStr string, referrer *url.URL) (*http.Request, error) {
+	target, err := url.Parse(targetUrlStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// fix missing fields, e.g:
+	// - url without scheme: //www.google.com/1.js
+	// - url without host: /1.js
+	if target.Scheme == "" {
+		target.Scheme = referrer.Scheme
+	}
+	if target.Host == "" {
+		target.Host = referrer.Host
+	}
+	return buildRequest(ctx, target.String()), nil
 }
 
 func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) {
@@ -126,11 +145,15 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 	}
 	ps.logger.Info(fmt.Sprintln("prefetch doc: ", docUrl, ", resources: ", urls))
 
-	fn := func(targetUrl string) {
-		req := ps.buildPrefetchRequest(ctx, targetUrl)
+	fn := func(targetUrlStr string) {
+		req, err := ps.buildPrefetchRequest(ctx, targetUrlStr, resp.Request.URL)
+		if err != nil {
+			ps.logger.Debug(targetUrlStr, ": err: ", err)
+			return
+		}
 
 		if ps.flyingResps.Exists(req) {
-			ps.logger.Debug(targetUrl, ": flying")
+			ps.logger.Debug(targetUrlStr, ": flying")
 			return
 		}
 		/*
@@ -141,11 +164,16 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 			}
 		*/
 
-		go func() error {
+		go func() (err error) {
+			defer func() {
+				if err != nil {
+					ps.logger.Debug(targetUrlStr, ": err:", err)
+				}
+			}()
 			ps.flyingResps.Add(req)
 			defer ps.flyingResps.Delete(req)
 
-			ps.logger.Debug(targetUrl, ": do")
+			ps.logger.Debug(targetUrlStr, ": do")
 			resp, err := ps.httpClient.Do(req)
 			if err != nil {
 				return err
