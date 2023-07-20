@@ -6,24 +6,22 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/zckevin/http2-mitm-proxy/prefetch/httpcache"
 )
 
 // TODO: remove this
 type racingHTTPClientFactory struct {
 	pushRespCh chan *http.Response
 	closedCh   chan struct{}
-	cache      *respCache
-}
-
-func getCacheKey(req *http.Request) string {
-	return req.URL.String()
+	cache      httpcache.HTTPCache
 }
 
 func newRacingHTTPClientFactory(pushRespCh chan *http.Response) *racingHTTPClientFactory {
 	cl := &racingHTTPClientFactory{
 		pushRespCh: pushRespCh,
 		closedCh:   make(chan struct{}),
-		cache:      newRespCache(),
+		cache:      httpcache.NewInMemoryHTTPCache(false),
 	}
 	go func() {
 		for {
@@ -32,7 +30,7 @@ func newRacingHTTPClientFactory(pushRespCh chan *http.Response) *racingHTTPClien
 				return
 			case resp := <-cl.pushRespCh:
 				log.Println("=== recv push resp ===", resp.Request.URL)
-				cl.cache.Add(resp)
+				cl.cache.AddUnresolved(resp)
 			}
 		}
 	}()
@@ -62,7 +60,7 @@ type racingHTTPClient struct {
 
 func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) {
 	// 1. check cache, if cached, return; else create a listener for server push
-	cachedResp, ln := c.factory.cache.GetOrCreateListener(req)
+	cachedResp, ln := c.factory.cache.GetUnresolvedOrCreateListener(req)
 	if cachedResp != nil {
 		log.Println(time.Now(), "1", req.URL)
 		return cachedResp, nil
@@ -94,8 +92,8 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 			// if done is closed, it means the function is returned, we could return safely
 			case <-done:
 				return
-			case <-ln.ch:
-				resultCh <- &racingResult{c.factory.cache.Get(req), nil, true}
+			case <-ln.C:
+				resultCh <- &racingResult{c.factory.cache.GetUnresolved(req), nil, true}
 				log.Println(time.Now(), "3", req.URL)
 				return
 			}

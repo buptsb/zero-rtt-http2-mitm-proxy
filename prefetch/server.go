@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gregjones/httpcache"
+	rfchttpcache "github.com/gregjones/httpcache"
 	"github.com/sagernet/sing-box/log"
 	"github.com/zckevin/http2-mitm-proxy/common"
 	htmlparser "github.com/zckevin/http2-mitm-proxy/prefetch/html_parser"
+	"github.com/zckevin/http2-mitm-proxy/prefetch/httpcache"
 )
 
 var (
@@ -37,7 +38,7 @@ type PrefetchServer struct {
 	httpClient common.HTTPRequestDoer
 	logger     log.ContextLogger
 
-	cache       *httpcache.MemoryCache
+	cache       httpcache.HTTPCache
 	flyingResps *common.TTLCache
 	ttlHistory  *common.TTLCache
 
@@ -46,9 +47,9 @@ type PrefetchServer struct {
 }
 
 func NewPrefetchServer() *PrefetchServer {
-	cache := httpcache.NewMemoryCache()
+	cache := httpcache.NewInMemoryHTTPCache(true)
 	baseClient := common.NewAutoFallbackClient()
-	trWithHTTPCache := httpcache.NewTransport(cache)
+	trWithHTTPCache := rfchttpcache.NewTransport(cache)
 	trWithHTTPCache.Transport = baseClient
 	return &PrefetchServer{
 		logger:      common.NewLogger("PrefetchServer"),
@@ -124,13 +125,13 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 			return
 		}
 
-		reqCacheKey := getCacheKey(req)
+		reqCacheKey := common.GetCacheKey(req)
 		if _, ok := ps.flyingResps.Get(reqCacheKey); ok {
 			ps.logger.Debug(targetUrlStr, ": flying")
 			return
 		}
 		/*
-			if ps.cache.Exists(getCacheKey(req)) {
+			if ps.cache.Exists(common.GetCacheKey(req)) {
 				ps.logger.Debug(fmt.Sprintf("[doc:%s, resource: %s]", docUrl, targetUrl), ": cached")
 				ps.logger.Debug(targetUrl, ": cached")
 				return

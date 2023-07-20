@@ -160,8 +160,7 @@ func (ps *PushChannelServer) Push(ctx context.Context, resp *http.Response) erro
 		return fmt.Errorf("failed to copy body: %w", err)
 	} else {
 		if resp.ContentLength != -1 && n != resp.ContentLength {
-			// TODO: remove this panic?
-			panic(fmt.Sprintf("content length mismatch, expect %d, got %d", resp.ContentLength, n))
+			return fmt.Errorf("content length mismatch, expect %d, got %d", resp.ContentLength, n)
 		}
 	}
 	return nil

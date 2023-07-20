@@ -3,8 +3,6 @@ package prefetch
 import (
 	"net"
 	"net/http"
-	"net/url"
-	"path/filepath"
 
 	"github.com/sagernet/sing-box/log"
 	"github.com/zckevin/http2-mitm-proxy/common"
@@ -39,21 +37,11 @@ func (pc *PrefetchClient) createHTTPClient() common.HTTPRequestDoer {
 	return common.NewHttpClient(racingClient)
 }
 
-func filterResourceExtension(u *url.URL) bool {
-	ext := filepath.Ext(u.Path)
-	return ext == ".js" || ext == ".css"
-}
-
 func (pc *PrefetchClient) FilterRequest(req *http.Request) (result bool) {
-	if req.Method == http.MethodGet &&
-		filterResourceExtension(req.URL) &&
-		// req.Header.Get("if-none-match") == "" &&
-		// req.Header.Get("cache-control") != "no-cache" &&
-		// req.Header.Get("pragma") != "no-cache" {
-		true {
-		return true
-	}
-	return false
+	// req.Header.Get("if-none-match") == "" &&
+	// req.Header.Get("cache-control") != "no-cache" &&
+	// req.Header.Get("pragma") != "no-cache" {
+	return common.IsRequestCachable(req)
 }
 
 func (pc *PrefetchClient) Do(req *http.Request) (*http.Response, error) {
