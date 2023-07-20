@@ -59,11 +59,16 @@ func (h *h2MuxHandler) writeInternalError(w http.ResponseWriter, err error) {
 }
 
 func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// ctx, cancel := context.WithCancel(context.Background())
+	// defer cancel()
+	var err error
+	defer func() {
+		if err != nil {
+			h.writeInternalError(w, err)
+		}
+	}()
 
 	common.FixRequest(r)
-	r = r.WithContext(ctx)
 	if r.Body != nil {
 		defer r.Body.Close()
 	}
@@ -73,10 +78,7 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.dump("== dump request for: ", string(buf), r)
 	}
 
-	var (
-		resp *http.Response
-		err  error
-	)
+	var resp *http.Response
 	if !h.isServerSide && h.pc.FilterRequest(r) {
 		// add client to context for prefetch's racing http client
 		r = r.WithContext(context.WithValue(r.Context(), "client", h.client))
@@ -84,13 +86,15 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resp, err = h.client.Do(r)
 	}
-
 	if err != nil {
 		if !common.IsIgnoredError(err) {
 			h.logError(r, "do request err: ", err)
 		}
-		h.writeInternalError(w, err)
 		return
+	}
+	if h.debug {
+		buf, _ := httputil.DumpResponse(resp, false)
+		h.dump("== dump response for: ", string(buf), r)
 	}
 	defer resp.Body.Close()
 
@@ -98,13 +102,9 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		// TODO: if html load fast and then exit, if we want to cancel all flying prefetch requests?
 		h.ps.TryPrefetch( /*ctx,*/ context.Background(), resp)
 	}
-
-	if h.debug {
-		buf, _ := httputil.DumpResponse(resp, false)
-		h.dump("== dump response for: ", string(buf), r)
-	}
-	if err := common.CopyResponse(w, resp); err != nil /* && !errors.Is(err, io.EOF) */ {
+	if err = common.CopyResponse(w, resp); err != nil /* && !errors.Is(err, io.EOF) */ {
 		h.logError(r, "CopyResponse err: ", err)
+		return
 	}
 }
 

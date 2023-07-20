@@ -18,6 +18,10 @@ var (
 	LogFactory log.Factory
 )
 
+func init() {
+	_ = NewLogger("common")
+}
+
 func NewLogger(name string) log.ContextLogger {
 	if LogFactory == nil {
 		f, err := log.New(log.Options{

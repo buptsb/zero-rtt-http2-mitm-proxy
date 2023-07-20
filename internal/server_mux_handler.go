@@ -30,14 +30,8 @@ var (
 	// https://tools.ietf.org/html/rfc7540#section-3.5
 	connectionPreface = []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
 
-	httpClient common.HTTPRequestDoer
+	_ mux.ServerHandler = (*muxHandler)(nil)
 )
-
-func init() {
-	httpClient = common.NewAutoFallbackClient()
-}
-
-var _ mux.ServerHandler = (*muxHandler)(nil)
 
 type muxHandler struct {
 	relayType string
@@ -128,7 +122,7 @@ func (h *muxHandler) serveH2Conn(ctx context.Context, stream net.Conn, u *url.UR
 	case "martian":
 		return h.h2Config.Proxy(nil, stream, u)
 	case "h2":
-		return createServerSideH2Relay(stream, httpClient, h.ps)
+		return createServerSideH2Relay(stream, h.ps.HTTPClient(), h.ps)
 	default:
 		panic("unknown relay type")
 	}
