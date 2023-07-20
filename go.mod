@@ -41,15 +41,13 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/google/martian/v3 => /home/zc/PROJECTS/tcp/martian-origin
+replace github.com/google/martian/v3 => ../martian-origin
 
-replace github.com/sagernet/sing-mux => /home/zc/PROJECTS/tcp/sing-mux
+replace github.com/sagernet/sing-mux => ../sing-mux
 
-replace github.com/zckevin/go-libs => /home/zc/PROJECTS/tcp/go-libs
+replace github.com/zckevin/go-libs => ../go-libs
 
-replace github.com/gregjones/httpcache => /home/zc/PROJECTS/tcp/httpcache2
-
-replace github.com/dustin/go-broadcast => /home/zc/PROJECTS/tcp/go-broadcast
+replace github.com/gregjones/httpcache => ../httpcache2
 
 // replace golang.org/x/net => /home/zc/PROJECTS/tcp/net
 // replace github.com/sagernet/sing => /home/zc/PROJECTS/tcp/sing
