@@ -71,7 +71,6 @@ func (c *Cleaner) Cleaning(cache *cache) {
 			cache.purge()
 		case <-c.stop:
 			ticker.Stop()
-
 		}
 	}
 }
@@ -92,25 +91,33 @@ func (c *cache) purge() {
 }
 
 func (c *cache) Set(key string, value interface{}) {
-	expireAt := time.Now().Add(c.defaultExpiryDuration)
 	c.locker.Lock()
 	defer c.locker.Unlock()
+
+	expireAt := time.Now().Add(c.defaultExpiryDuration)
 	c.kvstore[key] = Data{
 		Value:    value,
 		ExpireAt: expireAt,
 	}
 }
+
 func (c *cache) Get(key string) (interface{}, bool) {
 	c.locker.RLock()
 	defer c.locker.RUnlock()
+
 	data, found := c.kvstore[key]
 	if !found {
 		return nil, false
 	}
-
 	if data.ExpireAt.Before(time.Now()) {
 		return nil, false
 	}
-
 	return data.Value, true
+}
+
+func (c *cache) Delete(key string) {
+	c.locker.Lock()
+	defer c.locker.Unlock()
+
+	delete(c.kvstore, key)
 }

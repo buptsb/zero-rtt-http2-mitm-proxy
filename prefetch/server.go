@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gregjones/httpcache"
@@ -34,44 +33,13 @@ func init() {
 	}
 }
 
-type flyingHTTPResponseCache struct {
-	mu      sync.Mutex
-	history map[string]struct{}
-}
-
-func newFlyingHTTPResponseCache() *flyingHTTPResponseCache {
-	return &flyingHTTPResponseCache{
-		history: make(map[string]struct{}),
-	}
-}
-
-func (c *flyingHTTPResponseCache) Exists(req *http.Request) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	_, ok := c.history[req.URL.String()]
-	return ok
-}
-
-func (c *flyingHTTPResponseCache) Add(req *http.Request) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.history[req.URL.String()] = struct{}{}
-}
-
-func (c *flyingHTTPResponseCache) Delete(req *http.Request) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.history, req.URL.String())
-}
-
 type PrefetchServer struct {
 	httpClient common.HTTPRequestDoer
 	logger     log.ContextLogger
 
 	cache       *httpcache.MemoryCache
-	flyingResps *flyingHTTPResponseCache
-
-	ttlHistory *common.TTLCache
+	flyingResps *common.TTLCache
+	ttlHistory  *common.TTLCache
 
 	// only one push channel is allowed for now
 	channel *PushChannelServer
@@ -86,9 +54,13 @@ func NewPrefetchServer() *PrefetchServer {
 		logger:      common.NewLogger("PrefetchServer"),
 		cache:       cache,
 		httpClient:  common.NewHttpClient(trWithHTTPCache),
-		flyingResps: newFlyingHTTPResponseCache(),
+		flyingResps: common.NewTTLCache(0, 0),
 		ttlHistory:  common.NewTTLCache(time.Second*5, time.Minute),
 	}
+}
+
+func (ps *PrefetchServer) HTTPClient() common.HTTPRequestDoer {
+	return ps.httpClient
 }
 
 func (ps *PrefetchServer) CreatePushChannel(conn net.Conn) {
@@ -152,7 +124,8 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 			return
 		}
 
-		if ps.flyingResps.Exists(req) {
+		reqCacheKey := getCacheKey(req)
+		if _, ok := ps.flyingResps.Get(reqCacheKey); ok {
 			ps.logger.Debug(targetUrlStr, ": flying")
 			return
 		}
@@ -167,11 +140,11 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 		go func() (err error) {
 			defer func() {
 				if err != nil {
-					ps.logger.Debug(targetUrlStr, ": err:", err)
+					ps.logger.Debug(reqCacheKey, ": err:", err)
 				}
 			}()
-			ps.flyingResps.Add(req)
-			defer ps.flyingResps.Delete(req)
+			ps.flyingResps.Set(reqCacheKey, struct{}{})
+			defer ps.flyingResps.Delete(reqCacheKey)
 
 			ps.logger.Debug(targetUrlStr, ": do")
 			resp, err := ps.httpClient.Do(req)
