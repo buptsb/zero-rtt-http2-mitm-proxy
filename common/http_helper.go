@@ -1,9 +1,13 @@
 package common
 
 import (
+	"compress/gzip"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
+	"github.com/google/brotli/go/cbrotli"
 	"github.com/nadoo/glider/pkg/pool"
 	"golang.org/x/exp/maps"
 )
@@ -49,4 +53,22 @@ func NewHttpClient(tr http.RoundTripper) *http.Client {
 		},
 	}
 	return cl
+}
+
+func WrapCompressedReader(r io.Reader, encoding string) (io.ReadCloser, error) {
+	switch strings.ToLower(encoding) {
+	case "":
+		return io.NopCloser(r), nil
+	case "gzip":
+		gr, err := gzip.NewReader(r)
+		if err != nil {
+			return nil, fmt.Errorf("html_parser: gzip.NewReader failed: %w", err)
+		}
+		return gr, nil
+	case "br":
+		br := cbrotli.NewReader(r)
+		return br, nil
+	default:
+		return nil, fmt.Errorf("content-encoding not support: %s", encoding)
+	}
 }

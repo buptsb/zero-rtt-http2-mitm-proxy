@@ -3,15 +3,14 @@ package html_parser
 import (
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/google/brotli/go/cbrotli"
 	buffer "github.com/zckevin/go-libs/repeatable_buffer"
+	"github.com/zckevin/http2-mitm-proxy/common"
 )
 
 var (
@@ -21,10 +20,12 @@ var (
 
 	ErrHeadElementNotFound       = fmt.Errorf("html_parser: head element not found")
 	ErrContentEncodingNotSupport = fmt.Errorf("html_parser: content-encoding not support")
+
+	head_read_limit = 128 * 1024
 )
 
 type readerWithCache struct {
-	r     io.Reader
+	r     io.ReadCloser
 	cache bytes.Buffer
 }
 
@@ -40,25 +41,19 @@ func (rwc *readerWithCache) Bytes() []byte {
 	return rwc.cache.Bytes()
 }
 
+func (rwc *readerWithCache) Close() error {
+	return rwc.r.Close()
+}
+
 func parseHead(r io.Reader, encoding string) ([]byte, error) {
-	var rwc readerWithCache
-	switch encoding {
-	case "":
-		rwc.r = r
-	case "gzip":
-		gr, err := gzip.NewReader(r)
-		if err != nil {
-			return nil, fmt.Errorf("html_parser: gzip.NewReader failed: %w", err)
-		}
-		defer gr.Close()
-		rwc.r = gr
-	case "br":
-		br := cbrotli.NewReader(r)
-		defer br.Close()
-		rwc.r = br
-	default:
-		panic("not reachable")
+	var (
+		rwc readerWithCache
+		err error
+	)
+	if rwc.r, err = common.WrapCompressedReader(r, encoding); err != nil {
+		return nil, err
 	}
+	defer rwc.Close()
 
 	runeRd := bufio.NewReader(&rwc)
 	loc := html_head_regexp.FindReaderIndex(runeRd)
@@ -86,7 +81,7 @@ func GetHTMLHeadContent(resp *http.Response) ([]byte, error) {
 
 	encoding := resp.Header.Get("Content-Encoding")
 	if encoding == "" || encoding == "gzip" || encoding == "br" {
-		return parseHead(fork, encoding)
+		return parseHead(io.LimitReader(fork, int64(head_read_limit)), encoding)
 	}
 	return nil, ErrContentEncodingNotSupport
 }
@@ -98,7 +93,15 @@ func unwrap(s *goquery.Selection, key string) string {
 	return ""
 }
 
-func ExtractResourcesInHead(resp *http.Response) ([]string, error) {
+func ExtractResourcesInHead(resp *http.Response) (_ []string, err error) {
+	/*
+		start := time.Now()
+		defer func() {
+			if err == nil {
+				common.NewLogger("html_parser").Debug("ExtractResourcesInHead: ", "url ", resp.Request.URL.String(), ", took ", time.Since(start))
+			}
+		}()
+	*/
 	headbuf, err := GetHTMLHeadContent(resp)
 	if err != nil {
 		return nil, err
