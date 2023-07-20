@@ -146,6 +146,7 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 			ps.flyingResps.Set(reqCacheKey, struct{}{})
 			defer ps.flyingResps.Delete(reqCacheKey)
 
+			fmt.Println(time.Now(), "do", req.URL)
 			ps.logger.Debug(targetUrlStr, ": do")
 			resp, err := ps.httpClient.Do(req)
 			if err != nil {
@@ -153,6 +154,7 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 			}
 			defer resp.Body.Close()
 			if ps.channel != nil {
+				fmt.Println(time.Now(), "push", req.URL)
 				if err = ps.channel.Push(context.Background(), resp); err != nil {
 					return err
 				}

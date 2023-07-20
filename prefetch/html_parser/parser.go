@@ -73,19 +73,6 @@ func wrapRespBody(resp *http.Response) buffer.RepeatableStreamWrapper {
 	})
 }
 
-func GetHTMLHeadContent(resp *http.Response) ([]byte, error) {
-	bodyWrapper := wrapRespBody(resp)
-	resp.Body = bodyWrapper
-	fork := bodyWrapper.Fork()
-	defer fork.Close()
-
-	encoding := resp.Header.Get("Content-Encoding")
-	if encoding == "" || encoding == "gzip" || encoding == "br" {
-		return parseHead(io.LimitReader(fork, int64(head_read_limit)), encoding)
-	}
-	return nil, ErrContentEncodingNotSupport
-}
-
 func unwrap(s *goquery.Selection, key string) string {
 	if val, ok := s.Attr(key); ok {
 		return val
@@ -94,19 +81,16 @@ func unwrap(s *goquery.Selection, key string) string {
 }
 
 func ExtractResourcesInHead(resp *http.Response) (_ []string, err error) {
-	/*
-		start := time.Now()
-		defer func() {
-			if err == nil {
-				common.NewLogger("html_parser").Debug("ExtractResourcesInHead: ", "url ", resp.Request.URL.String(), ", took ", time.Since(start))
-			}
-		}()
-	*/
-	headbuf, err := GetHTMLHeadContent(resp)
+	bodyWrapper := wrapRespBody(resp)
+	resp.Body = bodyWrapper
+	fork := bodyWrapper.Fork()
+	defer fork.Close()
+
+	headBuf, err := parseHead(io.LimitReader(fork, int64(head_read_limit)), resp.Header.Get("Content-Encoding"))
 	if err != nil {
 		return nil, err
 	}
-	doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(headbuf))
+	doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(headBuf))
 	if err != nil {
 		return nil, fmt.Errorf("html_parser: goquery.NewDocumentFromReader failed: %w", err)
 	}

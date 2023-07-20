@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 // TODO: remove this
@@ -63,7 +64,7 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 	// 1. check cache, if cached, return; else create a listener for server push
 	cachedResp, ln := c.factory.cache.GetOrCreateListener(req)
 	if cachedResp != nil {
-		log.Println("1", req.URL)
+		log.Println(time.Now(), "1", req.URL)
 		return cachedResp, nil
 	}
 	defer ln.Close()
@@ -83,7 +84,7 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 		}
 		req = req.WithContext(ctx)
 		resp, err := client.Do(req)
-		log.Println("2", req.URL)
+		log.Println(time.Now(), "2", req.URL)
 		resultCh <- &racingResult{resp, err, false}
 	}()
 	// 3. listen for server push
@@ -95,7 +96,7 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 				return
 			case <-ln.ch:
 				resultCh <- &racingResult{c.factory.cache.Get(req), nil, true}
-				log.Println("3", req.URL)
+				log.Println(time.Now(), "3", req.URL)
 				return
 			}
 		}
@@ -105,7 +106,10 @@ func (c *racingHTTPClient) RoundTrip(req *http.Request) (*http.Response, error) 
 	result := <-resultCh
 	// cancel the client.Do() request if we got a push response
 	if result.isPush {
+		fmt.Println("cancel", req.URL)
 		cancel()
+	} else {
+		// TODO: cancel push streaam
 	}
 	// else if client.Do() return first, we consider that no push resp will arrive,
 	// so just use its resp and err
