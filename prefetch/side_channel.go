@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"regexp"
 	"time"
 
 	ctxio "github.com/dolmen-go/contextio"
@@ -19,6 +20,10 @@ import (
 	N "github.com/sagernet/sing/common/network"
 	eofsignal "github.com/zckevin/go-libs/eof_signal"
 	"github.com/zckevin/http2-mitm-proxy/common"
+)
+
+var (
+	remove_transfer_encoding_regex = regexp.MustCompile(`(?mi)transfer-encoding: chunked\r\n`)
 )
 
 type PushChannelClient struct {
@@ -38,15 +43,40 @@ func NewPushChannelClient(dialFn func(string) (net.Conn, error), pushRespCh chan
 	return pc
 }
 
+// Chunked encoding is handled by net/http(or http2 ?) and it's already de-chunked
+// recv it on client side, so we just have to remove it in resp header blob.
+func handleHttp1ChunkedEncoding(hdr *PushResponseHeader, stream net.Conn) (io.Reader, error) {
+	resp, err := http.ReadResponse(bufio.NewReader(bytes.NewBuffer(hdr.ResponseWithoutBody)), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// remove chunked encoding in resp header bytes blob
+	if resp.TransferEncoding != nil && resp.TransferEncoding[0] == "chunked" {
+		hdr.ResponseWithoutBody = remove_transfer_encoding_regex.ReplaceAll(hdr.ResponseWithoutBody, nil)
+	}
+	return stream, nil
+}
+
 // serve server initiated push stream
-func (pc *PushChannelClient) servePushStream(ctx context.Context, stream net.Conn, metadata M.Metadata) error {
+func (pc *PushChannelClient) servePushStream(ctx context.Context, stream net.Conn, metadata M.Metadata) (err error) {
+	defer func() {
+		if err != nil {
+			fmt.Println("servePushStream error: ", err)
+		}
+	}()
+
 	var hdr PushResponseHeader
 	dec := binary.NewDecoder(stream)
 	if err := dec.Decode(&hdr); err != nil {
 		return fmt.Errorf("failed to decode PushResponseHeader: %w", err)
 	}
+	r, err := handleHttp1ChunkedEncoding(&hdr, stream)
+	if err != nil {
+		return err
+	}
+	mr := io.MultiReader(bytes.NewBuffer(hdr.ResponseWithoutBody), ctxio.NewReader(ctx, r))
 	req := buildRequest(context.Background(), hdr.UrlString)
-	mr := io.MultiReader(bytes.NewBuffer(hdr.ResponseWithoutBody), ctxio.NewReader(ctx, stream))
 	resp, err := http.ReadResponse(bufio.NewReader(mr), req)
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
@@ -130,6 +160,7 @@ func (ps *PushChannelServer) Push(ctx context.Context, resp *http.Response) erro
 		return fmt.Errorf("failed to copy body: %w", err)
 	} else {
 		if resp.ContentLength != -1 && n != resp.ContentLength {
+			// TODO: remove this panic?
 			panic(fmt.Sprintf("content length mismatch, expect %d, got %d", resp.ContentLength, n))
 		}
 	}
