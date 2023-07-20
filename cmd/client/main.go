@@ -27,8 +27,9 @@ var (
 	debugMode = flag.Bool("debug", false, "debug mode")
 	level     = flag.Int("log-level", 0, "log level, 0-3")
 
-	cert = flag.String("cert", "", "filepath to the CA certificate used to sign MITM certificates")
-	key  = flag.String("key", "", "filepath to the private key of the CA used to sign MITM certificates")
+	cert   = flag.String("cert", "", "filepath to the CA certificate used to sign MITM certificates")
+	key    = flag.String("key", "", "filepath to the private key of the CA used to sign MITM certificates")
+	unsafe = flag.Bool("unsafe", false, "generate only one certificate and use it for all hosts")
 
 	listenAddr = flag.String("addr", ":8080", "host:port of the proxy")
 	serverAddr = flag.String("server-addr", "", "proxy server address")
@@ -97,6 +98,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		mc.UnsafeUseSameCertificate = *unsafe
 
 		// dialFn := internal.NewMuxServerConnDialer(*serverAddr, "smux", 1).DialNormalStream
 		lp := internal.NewLocalProxy(*serverAddr)
