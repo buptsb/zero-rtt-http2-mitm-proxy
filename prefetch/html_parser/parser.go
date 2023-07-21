@@ -16,7 +16,7 @@ import (
 var (
 	// flags: multi-line + dot match newline
 	// match <html> and <body> tag in case some html page doesn't have <head> tag
-	html_head_regex  = `(?ms)<html.+?<body>`
+	html_head_regex  = `(?ms)<html.+?<body`
 	html_head_regexp = regexp.MustCompile(html_head_regex)
 
 	ErrHeadElementNotFound       = fmt.Errorf("html_parser: head element not found")
