@@ -31,6 +31,8 @@ var (
 	connectionPreface = []byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
 
 	_ mux.ServerHandler = (*muxHandler)(nil)
+
+	httpclient = common.NewAutoFallbackClient()
 )
 
 type muxHandler struct {
@@ -50,7 +52,7 @@ func NewMuxHandler(relayType string) *muxHandler {
 		relayType: relayType,
 		h2Config:  h2Config,
 		logger:    common.NewLogger("muxerHandler"),
-		ps:        prefetch.NewPrefetchServer(),
+		ps:        prefetch.NewPrefetchServer(httpclient),
 	}
 }
 
@@ -122,7 +124,7 @@ func (h *muxHandler) serveH2Conn(ctx context.Context, stream net.Conn, u *url.UR
 	case "martian":
 		return h.h2Config.Proxy(nil, stream, u)
 	case "h2":
-		return createServerSideH2Relay(stream, h.ps.HTTPClient(), h.ps)
+		return createServerSideH2Relay(stream, httpclient, h.ps)
 	default:
 		panic("unknown relay type")
 	}

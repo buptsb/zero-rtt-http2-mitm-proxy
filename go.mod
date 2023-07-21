@@ -47,8 +47,7 @@ replace github.com/sagernet/sing-mux => ../sing-mux
 
 replace github.com/zckevin/go-libs => ../go-libs
 
-replace github.com/gregjones/httpcache => ../httpcache2
-
+// replace github.com/gregjones/httpcache => ../httpcache2
 // replace golang.org/x/net => /home/zc/PROJECTS/tcp/net
 // replace github.com/sagernet/sing => /home/zc/PROJECTS/tcp/sing
 // replace github.com/sagernet/smux => /home/zc/PROJECTS/tcp/smux

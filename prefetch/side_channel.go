@@ -145,7 +145,6 @@ func (ps *PushChannelServer) Push(ctx context.Context, resp *http.Response) erro
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 	defer st.Close()
 
 	dumped, _ := httputil.DumpResponse(resp, false)

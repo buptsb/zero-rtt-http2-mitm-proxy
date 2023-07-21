@@ -108,6 +108,7 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO: we should create a relay for all incoming h2conns
 /*
 func h2Relay(h2conn net.Conn, client common.HTTPRequestDoer, isServerSide bool) error {
 	handler := newH2MuxHandler(isServerSide, common.DebugMode, client)

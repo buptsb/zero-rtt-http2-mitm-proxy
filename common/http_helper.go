@@ -14,6 +14,7 @@ import (
 
 type HTTPRequestDoer interface {
 	Do(req *http.Request) (*http.Response, error)
+	// RoundTrip(req *http.Request) (*http.Response, error)
 }
 
 func FixRequest(r *http.Request) {
