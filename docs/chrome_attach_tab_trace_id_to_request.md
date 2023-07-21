@@ -11,8 +11,8 @@ Chrome's tab is a good choice, so we want to attach it into every request header
 
 Header Editor (open source)
 
-https://chrome.google.com/webstore/detail/header-editor/eningockdidmgiojffjmkdblpjocbhgh
-https://github.com/FirefoxBar/HeaderEditor
+- https://chrome.google.com/webstore/detail/header-editor/eningockdidmgiojffjmkdblpjocbhgh
+- https://github.com/FirefoxBar/HeaderEditor
 
 Support exectute javascript code to modify request headers
 
