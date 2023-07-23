@@ -9,6 +9,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/zckevin/http2-mitm-proxy/common"
 	"github.com/zckevin/http2-mitm-proxy/prefetch"
+	"github.com/zckevin/http2-mitm-proxy/tracing"
 	"golang.org/x/net/http2"
 )
 
@@ -59,19 +60,22 @@ func (h *h2MuxHandler) writeInternalError(w http.ResponseWriter, err error) {
 }
 
 func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
-	// ctx, cancel := context.WithCancel(context.Background())
-	// defer cancel()
-	var err error
-	defer func() {
-		if err != nil {
-			h.writeInternalError(w, err)
-		}
-	}()
-
 	common.FixRequest(r)
 	if r.Body != nil {
 		defer r.Body.Close()
 	}
+
+	ctx := tracing.TraceChromeTabSession(r)
+	ctx, span := tracing.GetTracer(ctx, "internal").Start(ctx, r.URL.String())
+	defer span.End()
+
+	var err error
+	defer func() {
+		if err != nil {
+			h.writeInternalError(w, err)
+			span.RecordError(err)
+		}
+	}()
 
 	if h.debug {
 		buf, _ := httputil.DumpRequest(r, true)
@@ -100,7 +104,7 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 
 	if h.isServerSide {
 		// TODO: if html load fast and then exit, if we want to cancel all flying prefetch requests?
-		h.ps.TryPrefetch( /*ctx,*/ context.Background(), resp)
+		h.ps.TryPrefetch(ctx, resp)
 	}
 	if err = common.CopyResponse(w, resp); err != nil /* && !errors.Is(err, io.EOF) */ {
 		h.logError(r, "CopyResponse err: ", err)

@@ -14,6 +14,8 @@ import (
 	"github.com/zckevin/go-libs/httpclient"
 	"github.com/zckevin/http2-mitm-proxy/common"
 	htmlparser "github.com/zckevin/http2-mitm-proxy/prefetch/html_parser"
+	"github.com/zckevin/http2-mitm-proxy/tracing"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var (
@@ -101,33 +103,48 @@ func (ps *PrefetchServer) buildPrefetchRequest(ctx context.Context, targetUrlStr
 	return buildRequest(ctx, target.String()), nil
 }
 
-func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) {
+var (
+	ErrPrefetchNotDocument          = fmt.Errorf("prefetch: not document")
+	ErrThrottled                    = fmt.Errorf("prefetch: throttled")
+	ErrNoPushChannel                = fmt.Errorf("prefetch: no push channel")
+	ErrResourceExistsInRFC7234Cache = fmt.Errorf("prefetch: resource exists in rfc7234 cache")
+)
+
+func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) (err error) {
 	if !filterPrefetchableDocumentResponse(resp) {
 		return
 	}
+	ctx, span := tracing.GetTracer(ctx, "prefetch").Start(ctx, "TryPrefetch")
+	defer span.End()
+
 	docUrl := resp.Request.URL.String()
+	span.SetAttributes(attribute.String("url", docUrl))
 	if _, ok := ps.ttlHistory.Get(docUrl); ok {
-		return
+		return ErrThrottled
 	} else {
 		ps.ttlHistory.Set(docUrl, struct{}{})
 	}
 
-	urls, err := htmlparser.ExtractResourcesInHead(resp)
+	urls, err := htmlparser.ExtractResourcesInHead(ctx, resp)
 	if err != nil {
 		ps.logger.Error(err)
-		return
+		return err
 	}
 	ps.logger.Info(fmt.Sprintln("prefetch doc: ", docUrl, ", resources: ", urls))
 	for _, url := range urls {
 		ps.prefetchResource(ctx, url, resp)
 	}
+	return nil
 }
 
 func (ps *PrefetchServer) prefetchResource(ctx context.Context, targetUrlStr string, resp *http.Response) (err error) {
+	ctx, span := tracing.GetTracer(ctx, "prefetch").Start(ctx, targetUrlStr)
 	defer func() {
 		if err != nil {
 			ps.logger.Debug(targetUrlStr, ": err:", err)
+			span.RecordError(err)
 		}
+		span.End()
 	}()
 
 	req, err := ps.buildPrefetchRequest(ctx, targetUrlStr, resp.Request.URL)
@@ -137,22 +154,20 @@ func (ps *PrefetchServer) prefetchResource(ctx context.Context, targetUrlStr str
 	}
 	if _, ok := ps.rfc7234HttpCache.Get(common.GetCacheKey(req)); ok {
 		// ps.logger.Debug(targetUrlStr, ": already exists")
-		fmt.Println("already exists", targetUrlStr)
-		return nil
+		return ErrResourceExistsInRFC7234Cache
 	}
-	fmt.Println(time.Now(), "do", req.URL)
 	if resp, err = ps.httpClient.Do(req); err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
 	if ps.channel != nil {
-		fmt.Println(time.Now(), "push", req.URL)
-		if err = ps.channel.Push(context.Background(), resp); err != nil {
-			return err
+		if err = ps.channel.Push(ctx, resp); err != nil {
+			return fmt.Errorf("failed to push resp: %w", err)
 		}
 	} else {
 		ps.logger.Debug("no push channel")
+		return ErrNoPushChannel
 	}
 	return nil
 }

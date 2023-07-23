@@ -20,6 +20,7 @@ import (
 	N "github.com/sagernet/sing/common/network"
 	eofsignal "github.com/zckevin/go-libs/eof_signal"
 	"github.com/zckevin/http2-mitm-proxy/common"
+	"github.com/zckevin/http2-mitm-proxy/tracing"
 )
 
 var (
@@ -141,6 +142,9 @@ var (
 )
 
 func (ps *PushChannelServer) Push(ctx context.Context, resp *http.Response) error {
+	ctx, span := tracing.GetTracer(ctx, "prefetch").Start(ctx, "push")
+	defer span.End()
+
 	st, err := ps.muxClient.DialContext(ctx, N.NetworkTCP, dummyAddr)
 	if err != nil {
 		return err

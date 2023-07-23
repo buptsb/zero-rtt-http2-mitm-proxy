@@ -3,6 +3,7 @@ package html_parser
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	buffer "github.com/zckevin/go-libs/repeatable_buffer"
 	"github.com/zckevin/http2-mitm-proxy/common"
+	"github.com/zckevin/http2-mitm-proxy/tracing"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var (
@@ -46,11 +49,11 @@ func (rwc *readerWithCache) Close() error {
 	return rwc.r.Close()
 }
 
-func parseHead(r io.Reader, encoding string) ([]byte, error) {
-	var (
-		rwc readerWithCache
-		err error
-	)
+func parseHead(ctx context.Context, r io.Reader, encoding string) (_ []byte, err error) {
+	_, span := tracing.GetTracer(ctx, "html_parser").Start(ctx, "parseHead")
+	defer span.End()
+
+	var rwc readerWithCache
 	if rwc.r, err = common.WrapCompressedReader(r, encoding); err != nil {
 		return nil, err
 	}
@@ -61,6 +64,7 @@ func parseHead(r io.Reader, encoding string) ([]byte, error) {
 	if loc == nil {
 		return nil, ErrHeadElementNotFound
 	}
+	span.SetAttributes(attribute.Int("headLength", loc[1]-loc[0]))
 	return rwc.Bytes()[loc[0]:loc[1]], nil
 }
 
@@ -81,22 +85,10 @@ func unwrap(s *goquery.Selection, key string) string {
 	return ""
 }
 
-func ExtractResourcesInHead(resp *http.Response) (_ []string, err error) {
-	bodyWrapper := wrapRespBody(resp)
-	resp.Body = bodyWrapper
-	fork := bodyWrapper.Fork()
-	defer fork.Close()
+func findLinksInDoc(ctx context.Context, doc *goquery.Document) (resources []string) {
+	_, span := tracing.GetTracer(ctx, "html_parser").Start(ctx, "findLinksInDoc")
+	defer span.End()
 
-	headBuf, err := parseHead(io.LimitReader(fork, int64(head_read_limit)), resp.Header.Get("Content-Encoding"))
-	if err != nil {
-		return nil, err
-	}
-	doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(headBuf))
-	if err != nil {
-		return nil, fmt.Errorf("html_parser: goquery.NewDocumentFromReader failed: %w", err)
-	}
-
-	var resources []string
 	doc.Find("script").Each(func(_ int, s *goquery.Selection) {
 		if src := unwrap(s, "src"); src != "" {
 			resources = append(resources, src)
@@ -110,5 +102,31 @@ func ExtractResourcesInHead(resp *http.Response) (_ []string, err error) {
 			}
 		}
 	})
-	return resources, nil
+	span.SetAttributes(attribute.StringSlice("resourcesUrls", resources))
+	return resources
+}
+
+func ExtractResourcesInHead(ctx context.Context, resp *http.Response) (resourceUrls []string, err error) {
+	ctx, span := tracing.GetTracer(ctx, "html_parser").Start(ctx, "ExtractResourcesInHead")
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+		span.End()
+	}()
+
+	bodyWrapper := wrapRespBody(resp)
+	resp.Body = bodyWrapper
+	fork := bodyWrapper.Fork()
+	defer fork.Close()
+
+	headBuf, err := parseHead(ctx, io.LimitReader(fork, int64(head_read_limit)), resp.Header.Get("Content-Encoding"))
+	if err != nil {
+		return nil, err
+	}
+	doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(headBuf))
+	if err != nil {
+		return nil, fmt.Errorf("html_parser: goquery.NewDocumentFromReader failed: %w", err)
+	}
+	return findLinksInDoc(ctx, doc), nil
 }

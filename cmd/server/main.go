@@ -12,6 +12,8 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/zckevin/http2-mitm-proxy/common"
 	"github.com/zckevin/http2-mitm-proxy/internal"
+	"github.com/zckevin/http2-mitm-proxy/tracing"
+	"go.opentelemetry.io/otel"
 )
 
 var (
@@ -62,6 +64,12 @@ func main() {
 	}
 	common.LogFactory.SetLevel(slog.LevelDebug)
 	common.DebugMode = *debugMode
+
+	tp, err := tracing.TraceProvider()
+	if err != nil {
+		panic(err)
+	}
+	otel.SetTracerProvider(tp)
 
 	listener()
 }
