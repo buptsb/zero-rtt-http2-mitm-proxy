@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/samber/lo"
 	buffer "github.com/zckevin/go-libs/repeatable_buffer"
 	"github.com/zckevin/http2-mitm-proxy/common"
 	"github.com/zckevin/http2-mitm-proxy/tracing"
@@ -102,8 +104,25 @@ func findLinksInDoc(ctx context.Context, doc *goquery.Document) (resources []str
 			}
 		}
 	})
-	span.SetAttributes(attribute.StringSlice("resourcesUrls", resources))
 	return resources
+}
+
+func fixUrl(targetUrlStr string, referrer *url.URL) string {
+	target, err := url.Parse(targetUrlStr)
+	if err != nil {
+		return ""
+	}
+
+	// fix missing fields, e.g:
+	// - url without scheme: //www.google.com/1.js
+	// - url without host: /1.js
+	if target.Scheme == "" {
+		target.Scheme = referrer.Scheme
+	}
+	if target.Host == "" {
+		target.Host = referrer.Host
+	}
+	return target.String()
 }
 
 func ExtractResourcesInHead(ctx context.Context, resp *http.Response) (resourceUrls []string, err error) {
@@ -128,5 +147,14 @@ func ExtractResourcesInHead(ctx context.Context, resp *http.Response) (resourceU
 	if err != nil {
 		return nil, fmt.Errorf("html_parser: goquery.NewDocumentFromReader failed: %w", err)
 	}
-	return findLinksInDoc(ctx, doc), nil
+
+	resourceUrls = lo.Filter(
+		lo.Map(findLinksInDoc(ctx, doc), func(s string, _ int) string {
+			return fixUrl(s, resp.Request.URL)
+		}),
+		func(s string, _ int) bool {
+			return s != ""
+		})
+	span.SetAttributes(attribute.StringSlice("resourcesUrls", resourceUrls))
+	return resourceUrls, nil
 }

@@ -97,6 +97,7 @@ func (h *muxHandler) serveNormalConn(ctx context.Context, stream net.Conn, metad
 		pc := common.NewPeekedConn(stream, io.MultiReader(bytes.NewReader(peekBuf), stream))
 		return h.serveH2Conn(ctx, pc, u)
 	} else {
+		// TODO: other protocols, e.g. websocket?
 		return h.serveH1Conn(ctx, stream, peekBuf)
 	}
 }

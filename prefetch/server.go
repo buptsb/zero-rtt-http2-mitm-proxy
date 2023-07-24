@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	htmlparser "github.com/zckevin/http2-mitm-proxy/prefetch/html_parser"
 	"github.com/zckevin/http2-mitm-proxy/tracing"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -85,24 +85,6 @@ func buildRequest(ctx context.Context, targetUrlStr string) *http.Request {
 	return req.WithContext(ctx)
 }
 
-func (ps *PrefetchServer) buildPrefetchRequest(ctx context.Context, targetUrlStr string, referrer *url.URL) (*http.Request, error) {
-	target, err := url.Parse(targetUrlStr)
-	if err != nil {
-		return nil, err
-	}
-
-	// fix missing fields, e.g:
-	// - url without scheme: //www.google.com/1.js
-	// - url without host: /1.js
-	if target.Scheme == "" {
-		target.Scheme = referrer.Scheme
-	}
-	if target.Host == "" {
-		target.Host = referrer.Host
-	}
-	return buildRequest(ctx, target.String()), nil
-}
-
 var (
 	ErrPrefetchNotDocument          = fmt.Errorf("prefetch: not document")
 	ErrThrottled                    = fmt.Errorf("prefetch: throttled")
@@ -131,31 +113,32 @@ func (ps *PrefetchServer) TryPrefetch(ctx context.Context, resp *http.Response) 
 		return err
 	}
 	ps.logger.Info(fmt.Sprintln("prefetch doc: ", docUrl, ", resources: ", urls))
+
+	propagator := tracing.NewKeyValueSpansPropagator("")
 	for _, url := range urls {
-		ps.prefetchResource(ctx, url, resp)
+		ctx, pspan := tracing.GetTracer(ctx, "prefetch").Start(ctx, url)
+		go ps.prefetchResource(ctx, pspan, url, resp)
+		if tracing.Enabled {
+			propagator.Inject(ctx, url)
+		}
 	}
+	resp.Header.Set("x-otel-spans-map", propagator.Serialize())
 	return nil
 }
 
-func (ps *PrefetchServer) prefetchResource(ctx context.Context, targetUrlStr string, resp *http.Response) (err error) {
-	ctx, span := tracing.GetTracer(ctx, "prefetch").Start(ctx, targetUrlStr)
+func (ps *PrefetchServer) prefetchResource(ctx context.Context, span trace.Span, targetUrlStr string, resp *http.Response) (err error) {
 	defer func() {
 		if err != nil {
-			ps.logger.Debug(targetUrlStr, ": err:", err)
 			span.RecordError(err)
 		}
 		span.End()
 	}()
 
-	req, err := ps.buildPrefetchRequest(ctx, targetUrlStr, resp.Request.URL)
-	if err != nil {
-		ps.logger.Debug(targetUrlStr, ": err: ", err)
-		return err
-	}
+	req := buildRequest(ctx, targetUrlStr)
 	if _, ok := ps.rfc7234HttpCache.Get(common.GetCacheKey(req)); ok {
-		// ps.logger.Debug(targetUrlStr, ": already exists")
 		return ErrResourceExistsInRFC7234Cache
 	}
+
 	if resp, err = ps.httpClient.Do(req); err != nil {
 		return err
 	}

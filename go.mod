@@ -16,6 +16,7 @@ require (
 	github.com/sagernet/sing v0.2.5
 	github.com/sagernet/sing-box v1.2.7
 	github.com/sagernet/sing-mux v0.1.0
+	github.com/samber/lo v1.38.1
 	github.com/zckevin/go-libs v0.0.1
 	go.opentelemetry.io/otel v1.16.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.16.0

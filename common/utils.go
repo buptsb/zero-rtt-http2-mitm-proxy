@@ -49,7 +49,7 @@ func IsIgnoredError(err error) bool {
 }
 
 func IsNetCancelError(err error) bool {
-	return strings.Contains(err.Error(), "operation was canceled")
+	return strings.Contains(err.Error(), "canceled")
 }
 
 func RandomString(length int) string {

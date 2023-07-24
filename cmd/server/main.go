@@ -65,7 +65,7 @@ func main() {
 	common.LogFactory.SetLevel(slog.LevelDebug)
 	common.DebugMode = *debugMode
 
-	tp, err := tracing.TraceProvider()
+	tp, err := tracing.TraceProvider("server")
 	if err != nil {
 		panic(err)
 	}

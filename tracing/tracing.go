@@ -2,14 +2,13 @@ package tracing
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 	"os"
-	"sync"
-	"time"
 
 	"github.com/zckevin/http2-mitm-proxy/common"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
@@ -23,14 +22,23 @@ const (
 )
 
 var (
+	Enabled = false
+
 	noopTp = trace.NewNoopTracerProvider()
 )
 
-func TraceProvider() (*tracesdk.TracerProvider, error) {
+func init() {
+	// for propagating trace context from client to server
+	pgtr := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
+	otel.SetTextMapPropagator(pgtr)
+}
+
+func TraceProvider(perspective string) (trace.TracerProvider, error) {
 	// Create the Jaeger exporter
 	ep := os.Getenv("JAEGER_ENDPOINT")
 	if ep == "" {
-		ep = "http://localhost:14268/api/traces"
+		// ep = "http://localhost:14268/api/traces"
+		return noopTp, nil
 	}
 	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(ep)))
 	if err != nil {
@@ -42,9 +50,8 @@ func TraceProvider() (*tracesdk.TracerProvider, error) {
 		resource.Default(),
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(serviceName),
+			semconv.ServiceNameKey.String(fmt.Sprintf("%s:%s", serviceName, perspective)),
 			// semconv.ServiceVersionKey.String("v0.1.0"),
-			// attribute.String("environment", "test"),
 		),
 	)
 	if err != nil {
@@ -59,33 +66,8 @@ func TraceProvider() (*tracesdk.TracerProvider, error) {
 		tracesdk.WithResource(res),
 		tracesdk.WithSampler(tracesdk.AlwaysSample()),
 	)
+	Enabled = true
 	return tp, nil
-}
-
-var (
-	mu             sync.Mutex
-	chromeSessions = make(map[string]context.Context)
-)
-
-func TraceChromeTabSession(req *http.Request) context.Context {
-	mu.Lock()
-	defer mu.Unlock()
-
-	traceId := req.Header.Get(chromeTabTraceIDHeader)
-	if traceId == "" {
-		return context.WithValue(context.Background(), contextIsIgnoredKey, struct{}{})
-	}
-	if ctx, ok := chromeSessions[traceId]; ok {
-		return ctx
-	}
-
-	ctx, span := otel.Tracer("chrome_session").Start(context.Background(), traceId)
-	// we don't know how long this web session will last, so we set a timeout
-	time.AfterFunc(time.Second*5, func() {
-		span.End()
-	})
-	chromeSessions[traceId] = ctx
-	return ctx
 }
 
 func GetTracer(ctx context.Context, name string) trace.Tracer {

@@ -19,6 +19,8 @@ import (
 	slog "github.com/sagernet/sing-box/log"
 	"github.com/zckevin/http2-mitm-proxy/common"
 	"github.com/zckevin/http2-mitm-proxy/internal"
+	"github.com/zckevin/http2-mitm-proxy/tracing"
+	"go.opentelemetry.io/otel"
 )
 
 var (
@@ -118,6 +120,12 @@ func main() {
 		})
 		p.SetMITM(mc)
 	}
+
+	tp, err := tracing.TraceProvider("client")
+	if err != nil {
+		panic(err)
+	}
+	otel.SetTracerProvider(tp)
 
 	go p.Serve(l)
 

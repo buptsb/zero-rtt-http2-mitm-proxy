@@ -10,6 +10,9 @@ import (
 	"github.com/zckevin/http2-mitm-proxy/common"
 	"github.com/zckevin/http2-mitm-proxy/prefetch"
 	"github.com/zckevin/http2-mitm-proxy/tracing"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 )
 
@@ -65,8 +68,18 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 	}
 
-	ctx := tracing.TraceChromeTabSession(r)
-	ctx, span := tracing.GetTracer(ctx, "internal").Start(ctx, r.URL.String())
+	var (
+		ctx  context.Context
+		span trace.Span
+	)
+	if !h.isServerSide {
+		ctx = tracing.GetChromeTracingContext(r)
+		ctx, span = tracing.GetTracer(ctx, "internal").Start(ctx, r.URL.String())
+		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(r.Header))
+	} else {
+		ctx = otel.GetTextMapPropagator().Extract(context.Background(), propagation.HeaderCarrier(r.Header))
+		ctx, span = tracing.GetTracer(ctx, "internal").Start(ctx, r.URL.String())
+	}
 	defer span.End()
 
 	var err error
@@ -102,10 +115,13 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	if h.isServerSide {
+	if !h.isServerSide {
+		tracing.AddSpansFromResponse(r, resp)
+	} else {
 		// TODO: if html load fast and then exit, if we want to cancel all flying prefetch requests?
 		h.ps.TryPrefetch(ctx, resp)
 	}
+
 	if err = common.CopyResponse(w, resp); err != nil /* && !errors.Is(err, io.EOF) */ {
 		h.logError(r, "CopyResponse err: ", err)
 		return
