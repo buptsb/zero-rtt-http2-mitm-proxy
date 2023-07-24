@@ -95,6 +95,8 @@ func (h *h2MuxHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.dump("== dump request for: ", string(buf), r)
 	}
 
+	// for tracing in go-libs
+	r = r.WithContext(ctx)
 	var resp *http.Response
 	if !h.isServerSide && h.pc.FilterRequest(r) {
 		// add client to context for prefetch's racing http client

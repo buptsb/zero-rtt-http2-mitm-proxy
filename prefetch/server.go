@@ -135,9 +135,9 @@ func (ps *PrefetchServer) prefetchResource(ctx context.Context, span trace.Span,
 	}()
 
 	req := buildRequest(ctx, targetUrlStr)
-	if _, ok := ps.rfc7234HttpCache.Get(common.GetCacheKey(req)); ok {
-		return ErrResourceExistsInRFC7234Cache
-	}
+	// if _, ok := ps.rfc7234HttpCache.Get(common.GetCacheKey(req)); ok {
+	// 	return ErrResourceExistsInRFC7234Cache
+	// }
 
 	if resp, err = ps.httpClient.Do(req); err != nil {
 		return err

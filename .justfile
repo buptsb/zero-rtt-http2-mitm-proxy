@@ -10,7 +10,7 @@ start-server:
   go run ./cmd/server --log-level=0
 
 start-client:
-  go run ./cmd/client --log-level={{log_level}} {{cert}} --server-addr={{server_addr}}
+  go run ./cmd/client --log-level={{log_level}} {{cert}} --server-addr={{server_addr}} --unsafe
 
 start-server-v:
   GODEBUG=http2debug=2 go run ./cmd/server --log-level={{log_level}} 

@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -47,7 +48,7 @@ func GetChromeTracingContext(req *http.Request) context.Context {
 		return sess.ctx
 	}
 
-	ctx, span := otel.Tracer("chrome_session").Start(context.Background(), traceId)
+	ctx, span := otel.Tracer("chrome_session").Start(context.Background(), fmt.Sprintf("%s:%s", traceId, req.URL.Host))
 	// we don't know how long this web session will last, so we set a timeout
 	time.AfterFunc(time.Second*5, func() {
 		span.End()
